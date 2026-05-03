@@ -4,7 +4,6 @@ import { persist } from 'zustand/middleware';
 const useUserStore = create(
   persist(
     (set, get) => ({
-      // State
       users: [
         {
           id: 1,
@@ -12,10 +11,12 @@ const useUserStore = create(
           name: 'Super Admin',
           email: 'superadmin@fleet.com',
           phone: '+92 300 1111111',
-          role: 'super_admin',
+          role: 'Super Admin',  // Changed to match designation name
           status: 'Active',
           department: 'Management',
           location: 'Head Office',
+          joiningDate: '2023-01-01',
+          lastLogin: 'Never',
         },
         {
           id: 2,
@@ -23,20 +24,46 @@ const useUserStore = create(
           name: 'Admin User',
           email: 'admin@fleet.com',
           phone: '+92 300 2222222',
-          role: 'admin',
+          role: 'Admin',  // Changed to match designation name
           status: 'Active',
           department: 'Management',
           location: 'Head Office',
+          joiningDate: '2023-03-15',
+          lastLogin: 'Never',
         },
+        {
+          id: 3,
+          userId: 'USR-003',
+          name: 'Regular User',
+          email: 'user@fleet.com',
+          phone: '+92 300 3333333',
+          role: 'Staff',  // Changed to match designation name
+          status: 'Active',
+          department: 'Operations',
+          location: 'Karachi',
+          joiningDate: '2023-06-01',
+          lastLogin: 'Never',
+        },
+          {
+          id: 4,
+          userId: 'USR-004',
+          name: 'Viewer User',
+          email: 'viewer@fleet.com',
+          phone: '+92 300 4444444',
+          role: 'Viewer',  // Changed to match designation name
+          status: 'Active',
+          department: 'Operations',
+          location: 'Karachi',
+          joiningDate: '2023-06-01',
+          lastLogin: 'Never',
+        },
+      
       ],
       isLoading: false,
       error: null,
 
-      // Actions
-      fetchUsers: async () => {
-        set({ isLoading: true });
-        await new Promise(resolve => setTimeout(resolve, 500));
-        set({ isLoading: false });
+      fetchUsers: () => {
+        return get().users;
       },
 
       addUser: async (userData) => {
@@ -46,17 +73,18 @@ const useUserStore = create(
             id: Date.now(),
             userId: `USR-${String(get().users.length + 1).padStart(3, '0')}`,
             ...userData,
-            status: 'Active',
+            joiningDate: new Date().toISOString().split('T')[0],
+            lastLogin: 'Never',
             createdAt: new Date().toISOString(),
           };
           set(state => ({
-            users: [newUser, ...state.users],
+            users: [...state.users, newUser],
             isLoading: false
           }));
           return { success: true, user: newUser };
         } catch (error) {
           set({ error: error.message, isLoading: false });
-          return { success: false };
+          return { success: false, error: error.message };
         }
       },
 
@@ -65,7 +93,7 @@ const useUserStore = create(
         try {
           set(state => ({
             users: state.users.map(user =>
-              user.id === id ? { ...user, ...userData } : user
+              user.id === id ? { ...user, ...userData, updatedAt: new Date().toISOString() } : user
             ),
             isLoading: false
           }));

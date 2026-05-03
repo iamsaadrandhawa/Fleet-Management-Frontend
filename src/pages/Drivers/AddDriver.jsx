@@ -3,6 +3,7 @@ import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
 import useDriverStore from '../../stores/driverStore';
 import useLedgerStore from '../../stores/ledgerStore';
 import useVehicleStore from '../../stores/vehicleStore';
+import Logger from '../../utils/Logger';
 
 export default function AddDriver() {
   const [formData, setFormData] = useState({
@@ -137,45 +138,60 @@ export default function AddDriver() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-     
-      const driverData = {
-        ...formData,
-        profilePicture: profilePicture ? profilePicture.name : null,
-        documents: documents.map(doc => doc.name),
-        fullName: `${formData.firstName} ${formData.lastName}`,
-        status: 'Active',
-        createdAt: new Date().toISOString()
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (validateForm()) {
+    // Generate employee ID if empty
+    if (!formData.employeeId) {
+      const generateEmployeeId = () => {
+        const randomNum = Math.floor(Math.random() * 1000);
+        return `EMP-${String(randomNum).padStart(3, '0')}`;
       };
-      
-      const result = await addDriver(driverData);
-      
-      if (result.success) {
-        alert('Driver added successfully!');
-        // Reset form
-        setFormData({
-          employeeId: '',
-          firstName: '',
-          lastName: '',
-          cnic: '',
-          phoneNumber: '',
-          designation: '',
-          location: '',
-          allocatedVehicle: '',
-          dateOfAllotment: '',
-        });
-        setProfilePicture(null);
-        setProfilePreview(null);
-        setDocuments([]);
-      } else {
-        alert('Error adding driver: ' + (result.error || 'Unknown error'));
-      }
+      formData.employeeId = generateEmployeeId();
     }
-  };
 
+    const driverData = {
+      ...formData,
+      profilePicture: profilePicture ? profilePicture.name : null,
+      documents: documents.map(doc => doc.name),
+      fullName: `${formData.firstName} ${formData.lastName}`,
+      status: 'Active',
+      createdAt: new Date().toISOString()
+    };
+    
+    const result = await addDriver(driverData);
+    
+    if (result.success) {
+      // Log the activity
+      Logger.createDriver({
+        id: result.driver?.id,
+        fullName: driverData.fullName,
+        employeeId: driverData.employeeId,
+        phoneNumber: driverData.phoneNumber
+      });
+      
+      alert('Driver added successfully!');
+      
+      // Reset form
+      setFormData({
+        employeeId: '',
+        firstName: '',
+        lastName: '',
+        cnic: '',
+        phoneNumber: '',
+        designation: '',
+        location: '',
+        allocatedVehicle: '',
+        dateOfAllotment: '',
+      });
+      setProfilePicture(null);
+      setProfilePreview(null);
+      setDocuments([]);
+    } else {
+      alert('Error adding driver: ' + (result.error || 'Unknown error'));
+    }
+  }
+};
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       

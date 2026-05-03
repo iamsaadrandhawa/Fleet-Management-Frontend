@@ -10,6 +10,8 @@ import VehicleList from './pages/Vehicles/VehicleList';
 import Users from './pages/Users/Users';
 import Ledgers from './pages/Ledgers/Ledgers';
 import Settings from './pages/Settings/Settings';
+import ActivityLogs from './utils/ActivityLogs';
+
 
 function App() {
   return (
@@ -31,6 +33,7 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="ledgers" element={<Ledgers />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="activity-logs" element={<ActivityLogs />} />
         </Route>
       </Routes>
     </BrowserRouter>

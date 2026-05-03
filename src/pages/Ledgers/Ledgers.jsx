@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, Search, X, Filter } from 'lucide-react';
+import { Plus, Search, X, Filter } from 'lucide-react';
 import useLedgerStore from '../../stores/ledgerStore';
+import LedgerFormModal from '../Ledgers/LedgerFormModal';
+import LedgerTableRow from '../Ledgers/LedgerTableRow';
+import Logger from '../../utils/Logger';
 
 export default function Ledgers() {
   const [activeTab, setActiveTab] = useState('designations');
@@ -10,9 +13,6 @@ export default function Ledgers() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [newName, setNewName] = useState('');
-  const [newCode, setNewCode] = useState('');
-  const [newDescription, setNewDescription] = useState('');
 
   // Get data from store
   const designations = useLedgerStore((state) => state.designations);
@@ -21,7 +21,6 @@ export default function Ledgers() {
   const vehicleCategories = useLedgerStore((state) => state.vehicleCategories);
   const fuelTypes = useLedgerStore((state) => state.fuelTypes);
   const transmissionTypes = useLedgerStore((state) => state.transmissionTypes);
-  const documentTypes = useLedgerStore((state) => state.documentTypes);
 
   // Get add functions
   const addDesignation = useLedgerStore((state) => state.addDesignation);
@@ -48,55 +47,16 @@ export default function Ledgers() {
   const deleteTransmission = useLedgerStore((state) => state.deleteTransmission);
 
   const tabs = [
-    { id: 'designations', name: 'Designations', data: designations, add: addDesignation, update: updateDesignation, delete: deleteDesignation },
-    { id: 'locations', name: 'Locations', data: locations, add: addLocation, update: updateLocation, delete: deleteLocation },
-    { id: 'makes', name: 'Vehicle Makes', data: makes, add: addMake, update: updateMake, delete: deleteMake },
-    { id: 'vehicleCategories', name: 'Vehicle Categories', data: vehicleCategories, add: addVehicleCategory, update: updateVehicleCategory, delete: deleteVehicleCategory },
-    { id: 'fuelTypes', name: 'Fuel Types', data: fuelTypes, add: addFuelType, update: updateFuelType, delete: deleteFuelType },
-    { id : 'transmissionTypes', name: 'Transmissions', data: transmissionTypes, add: addTransmission, update: updateTransmission, delete: deleteTransmission },
+    { id: 'designations', name: 'Designations', data: designations, add: addDesignation, update: updateDesignation, delete: deleteDesignation, showStatus: true },
+    { id: 'locations', name: 'Locations', data: locations, add: addLocation, update: updateLocation, delete: deleteLocation, showStatus: true },
+    { id: 'makes', name: 'Vehicle Makes', data: makes, add: addMake, update: updateMake, delete: deleteMake, showStatus: true },
+    { id: 'vehicleCategories', name: 'Vehicle Categories', data: vehicleCategories, add: addVehicleCategory, update: updateVehicleCategory, delete: deleteVehicleCategory, showStatus: true },
+    { id: 'fuelTypes', name: 'Fuel Types', data: fuelTypes, add: addFuelType, update: updateFuelType, delete: deleteFuelType, showStatus: true },
+    { id: 'transmissionTypes', name: 'transmissionTypes', data: transmissionTypes, add: addTransmission, update: updateTransmission, delete: deleteTransmission, showStatus: false },
   ];
 
   const currentTab = tabs.find(tab => tab.id === activeTab);
   const currentData = currentTab?.data || [];
-  
-  // Get add function for current tab
-  const getAddFunction = () => {
-    switch(activeTab) {
-      case 'designations': return addDesignation;
-      case 'locations': return addLocation;
-      case 'makes': return addMake;
-      case 'vehicleCategories': return addVehicleCategory;
-      case 'fuelTypes': return addFuelType;
-      case 'transmissionTypes': return addTransmission;
-      default: return null;
-    }
-  };
-
-  // Get update function for current tab
-  const getUpdateFunction = () => {
-    switch(activeTab) {
-      case 'designations': return updateDesignation;
-      case 'locations': return updateLocation;
-      case 'makes': return updateMake;
-      case 'vehicleCategories': return updateVehicleCategory;
-      case 'fuelTypes': return updateFuelType;
-      case 'transmissionTypes': return updateTransmission;
-      default: return null;
-    }
-  };
-
-  // Get delete function for current tab
-  const getDeleteFunction = () => {
-    switch(activeTab) {
-      case 'designations': return deleteDesignation;
-      case 'locations': return deleteLocation;
-      case 'makes': return deleteMake;
-      case 'vehicleCategories': return deleteVehicleCategory;
-      case 'fuelTypes': return deleteFuelType;
-      case 'transmissionTypes': return deleteTransmission;
-      default: return null;
-    }
-  };
 
   // Filter data
   let filteredData = [...currentData];
@@ -108,55 +68,64 @@ export default function Ledgers() {
     );
   }
   
-  if (filterStatus && activeTab !== 'vehicleStatuses' && activeTab !== 'driverStatuses') {
+  if (filterStatus && currentTab?.showStatus) {
     filteredData = filteredData.filter(item => item.status === filterStatus);
   }
 
-  const handleAdd = () => {
-    const addFunction = getAddFunction();
+  const handleAdd = (formData) => {
+    const addFunction = currentTab?.add;
     if (addFunction) {
       addFunction({ 
-        name: newName, 
-        code: newCode, 
-        description: newDescription,
+        name: formData.name, 
+        code: formData.code, 
+        description: formData.description,
         status: 'Active'
       });
+      
+      // Log the activity
+      const logMethod = `add${currentTab?.name.replace(/\s/g, '')}`;
+      if (Logger[logMethod]) {
+        Logger[logMethod]({ name: formData.name, code: formData.code });
+      }
     }
-    setNewName('');
-    setNewCode('');
-    setNewDescription('');
     setShowAddModal(false);
   };
 
   const handleEdit = (item) => {
     setSelectedItem(item);
-    setNewName(item.name);
-    setNewCode(item.code);
-    setNewDescription(item.description || '');
     setShowEditModal(true);
   };
 
-  const handleUpdate = () => {
-    const updateFunction = getUpdateFunction();
+  const handleUpdate = (formData) => {
+    const updateFunction = currentTab?.update;
     if (updateFunction && selectedItem) {
       updateFunction(selectedItem.id, {
-        name: newName,
-        code: newCode,
-        description: newDescription,
+        name: formData.name,
+        code: formData.code,
+        description: formData.description,
       });
+      
+      // Log the activity
+      const logMethod = `update${currentTab?.name.replace(/\s/g, '')}`;
+      if (Logger[logMethod]) {
+        Logger[logMethod]({ id: selectedItem.id, name: formData.name });
+      }
     }
     setShowEditModal(false);
-    setNewName('');
-    setNewCode('');
-    setNewDescription('');
     setSelectedItem(null);
   };
 
   const handleDelete = (id) => {
     if (confirm('Are you sure you want to delete this item?')) {
-      const deleteFunction = getDeleteFunction();
+      const deleteFunction = currentTab?.delete;
       if (deleteFunction) {
         deleteFunction(id);
+        
+        // Log the activity
+        const logMethod = `delete${currentTab?.name.replace(/\s/g, '')}`;
+        if (Logger[logMethod]) {
+          Logger[logMethod](id, selectedItem?.name);
+        }
       }
     }
   };
@@ -168,6 +137,11 @@ export default function Ledgers() {
       case 'Inactive': return 'bg-red-50 text-red-600';
       default: return 'bg-gray-100 text-gray-600';
     }
+  };
+
+  const clearFilters = () => {
+    setFilterStatus('');
+    setSearchTerm('');
   };
 
   return (
@@ -189,7 +163,7 @@ export default function Ledgers() {
           </div>
           
           {/* Filter Toggle Button */}
-          {activeTab !== 'vehicleStatuses' && activeTab !== 'driverStatuses' && (
+          {currentTab?.showStatus && (
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center gap-2 px-4 py-2 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition bg-white"
@@ -204,8 +178,8 @@ export default function Ledgers() {
             </button>
           )}
           
-          {/* Add Button - only show for tabs that support add */}
-          {getAddFunction() && (
+          {/* Add Button */}
+          {currentTab?.add && (
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition"
@@ -217,13 +191,13 @@ export default function Ledgers() {
         </div>
 
         {/* Filter Panel */}
-        {showFilters && activeTab !== 'vehicleStatuses' && activeTab !== 'driverStatuses' && (
+        {showFilters && currentTab?.showStatus && (
           <div className="mt-3 pt-3 border-t border-gray-100">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-[11px] font-medium text-gray-500">FILTER BY:</h3>
               {filterStatus && (
                 <button
-                  onClick={() => setFilterStatus('')}
+                  onClick={clearFilters}
                   className="text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1"
                 >
                   <X size={12} />
@@ -259,6 +233,7 @@ export default function Ledgers() {
                 setActiveTab(tab.id);
                 setSearchTerm('');
                 setFilterStatus('');
+                setShowFilters(false);
               }}
               className={`px-4 py-2 text-sm font-medium rounded-t-lg transition whitespace-nowrap ${
                 activeTab === tab.id
@@ -272,6 +247,7 @@ export default function Ledgers() {
         </nav>
       </div>
 
+     
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -281,7 +257,7 @@ export default function Ledgers() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                {activeTab !== 'vehicleStatuses' && activeTab !== 'driverStatuses' && (
+                {currentTab?.showStatus && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 )}
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -289,44 +265,14 @@ export default function Ledgers() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredData.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">{item.code}</code>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm text-gray-600">{item.description || '-'}</p>
-                  </td>
-                  {activeTab !== 'vehicleStatuses' && activeTab !== 'driverStatuses' && (
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-xs px-2 py-1 rounded-full ${getStatusBadgeColor(item.status)}`}>
-                        {item.status || 'Active'}
-                      </span>
-                    </td>
-                  )}
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex justify-end gap-2">
-                      {getUpdateFunction() && (
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="p-1 text-green-600 hover:bg-green-100 rounded transition"
-                        >
-                          <Edit size={16} />
-                        </button>
-                      )}
-                      {getDeleteFunction() && (
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1 text-red-600 hover:bg-red-100 rounded transition"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                <LedgerTableRow
+                  key={item.id}
+                  item={item}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  showStatus={currentTab?.showStatus}
+                  getStatusBadgeColor={getStatusBadgeColor}
+                />
               ))}
             </tbody>
           </table>
@@ -344,129 +290,28 @@ export default function Ledgers() {
 
       {/* Add Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h2 className="text-lg font-bold text-gray-900">
-                Add {currentTab?.name}
-              </h2>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                <input
-                  type="text"
-                  placeholder="Enter name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Code *</label>
-                <input
-                  type="text"
-                  placeholder="Enter code (e.g., SR-DRV)"
-                  value={newCode}
-                  onChange={(e) => setNewCode(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  placeholder="Optional description"
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-              >
-                Add Item
-              </button>
-            </div>
-          </div>
-        </div>
+        <LedgerFormModal
+          isEditing={false}
+          tabName={currentTab?.name}
+          onSubmit={handleAdd}
+          onClose={() => setShowAddModal(false)}
+        />
       )}
 
       {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h2 className="text-lg font-bold text-gray-900">
-                Edit {currentTab?.name}
-              </h2>
-              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                <input
-                  type="text"
-                  placeholder="Enter name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Code *</label>
-                <input
-                  type="text"
-                  placeholder="Enter code"
-                  value={newCode}
-                  onChange={(e) => setNewCode(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  placeholder="Description"
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdate}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
+      {showEditModal && selectedItem && (
+        <LedgerFormModal
+          isEditing={true}
+          item={selectedItem}
+          tabName={currentTab?.name}
+          onSubmit={handleUpdate}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedItem(null);
+          }}
+        />
       )}
-      
-      {/* Results Count */}
+       {/* Results Count */}
       <div className="text-sm text-gray-500 px-4">
         Showing {filteredData.length} of {currentData.length} items
       </div>

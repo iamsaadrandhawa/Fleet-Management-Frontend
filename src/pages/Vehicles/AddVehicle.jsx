@@ -3,6 +3,7 @@ import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
 import useVehicleStore from '../../stores/vehicleStore';
 import useLedgerStore from '../../stores/ledgerStore';
 import useDriverStore from '../../stores/driverStore';
+import logger from '../../utils/logger';
 
 export default function AddVehicle() {
   const [formData, setFormData] = useState({
@@ -173,52 +174,70 @@ export default function AddVehicle() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-     
-
-      const vehicleData = {
-        ...formData,
-        images: vehicleImages.map(img => img.name),
-        documents: documents.map(doc => doc.name),
-        createdAt: new Date().toISOString()
+  e.preventDefault();
+  if (validateForm()) {
+    // Generate vehicle ID if empty
+    if (!formData.vehicleId) {
+      const generateVehicleId = () => {
+        const randomNum = Math.floor(Math.random() * 1000);
+        return `VH-${String(randomNum).padStart(3, '0')}`;
       };
-      
-      const result = await addVehicle(vehicleData);
-      
-      if (result.success) {
-        alert('Vehicle added successfully!');
-        // Reset form
-        setFormData({
-          vehicleId: '',
-          registrationNumber: '',
-          model: '',
-          make: '',
-          year: '',
-          color: '',
-          fuelType: '',
-          transmission: '',
-          seatingCapacity: '',
-          chassisNumber: '',
-          engineNumber: '',
-          registrationDate: '',
-          insuranceExpiry: '',
-          fitnessExpiry: '',
-          pollutionExpiry: '',
-          assignedDriver: '',
-          purchaseDate: '',
-          purchasePrice: '',
-          status: 'Active',
-          vehicleCategory: '',
-        });
-        setVehicleImages([]);
-        setImagePreviews([]);
-        setDocuments([]);
-      } else {
-        alert('Error adding vehicle: ' + (result.error || 'Unknown error'));
-      }
+      formData.vehicleId = generateVehicleId();
     }
-  };
+
+    const vehicleData = {
+      ...formData,
+      images: vehicleImages.map(img => img.name),
+      documents: documents.map(doc => doc.name),
+      createdAt: new Date().toISOString()
+    };
+    
+    const result = await addVehicle(vehicleData);
+    
+    if (result.success) {
+      // Log the activity with logger
+      logger.createVehicle({
+        id: result.vehicle?.id || Date.now(),
+        make: vehicleData.make,
+        model: vehicleData.model,
+        registrationNumber: vehicleData.registrationNumber,
+        year: vehicleData.year,
+        vehicleCategory: vehicleData.vehicleCategory
+      });
+      
+      alert('Vehicle added successfully!');
+      
+      // Reset form
+      setFormData({
+        vehicleId: '',
+        registrationNumber: '',
+        model: '',
+        make: '',
+        year: '',
+        color: '',
+        fuelType: '',
+        transmission: '',
+        seatingCapacity: '',
+        chassisNumber: '',
+        engineNumber: '',
+        registrationDate: '',
+        insuranceExpiry: '',
+        fitnessExpiry: '',
+        pollutionExpiry: '',
+        assignedDriver: '',
+        purchaseDate: '',
+        purchasePrice: '',
+        status: 'Active',
+        vehicleCategory: '',
+      });
+      setVehicleImages([]);
+      setImagePreviews([]);
+      setDocuments([]);
+    } else {
+      alert('Error adding vehicle: ' + (result.error || 'Unknown error'));
+    }
+  }
+};
 
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
