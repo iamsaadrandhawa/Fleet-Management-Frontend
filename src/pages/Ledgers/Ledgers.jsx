@@ -3,7 +3,7 @@ import { Plus, Search, X, Filter } from 'lucide-react';
 import useLedgerStore from '../../stores/ledgerStore';
 import LedgerFormModal from '../Ledgers/LedgerFormModal';
 import LedgerTableRow from '../Ledgers/LedgerTableRow';
-import Logger from '../../utils/Logger';
+import Logger from '../../utils/logger';
 
 export default function Ledgers() {
   const [activeTab, setActiveTab] = useState('designations');
