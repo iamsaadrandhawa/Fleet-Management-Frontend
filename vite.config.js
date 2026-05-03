@@ -4,7 +4,24 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [
-    tailwindcss(),  // Add this BEFORE react() or after, both work
+    tailwindcss(),
     react(),
   ],
+  server: {
+    host: true,
+    port: 5173,
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['lucide-react'],
+          state: ['zustand'],
+        },
+      },
+    },
+  },
 })
