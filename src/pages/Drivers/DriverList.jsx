@@ -6,7 +6,7 @@ import useVehicleStore from '../../stores/vehicleStore';
 import DriverCard from '../Drivers/DriverCard';
 import DriverDetailsModal from '../Drivers/DriverDetailsModal';
 import DriverFormModal from '../Drivers/DriverFormModal';
-import Logger from '../../utils/Logger';
+import Logger from '../../utils/logger';
 
 export default function DriverList() {
   const [selectedDriver, setSelectedDriver] = useState(null);

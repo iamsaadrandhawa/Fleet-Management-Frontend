@@ -3,7 +3,7 @@ import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
 import useDriverStore from '../../stores/driverStore';
 import useLedgerStore from '../../stores/ledgerStore';
 import useVehicleStore from '../../stores/vehicleStore';
-import Logger from '../../utils/Logger';
+import Logger from '../../utils/logger';
 
 export default function AddDriver() {
   const [formData, setFormData] = useState({

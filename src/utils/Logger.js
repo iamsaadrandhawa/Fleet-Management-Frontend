@@ -6,7 +6,7 @@ class Logger {
     const { user } = useAuthStore.getState();
     
     const logEntry = {
-      action, // 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'LOGOUT', etc.
+      action, // 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'LOGOUT', etc. etc
       entityType, // 'DRIVER', 'VEHICLE', 'USER', 'DESIGNATION', 'LOCATION', 'MAKE', 'FUEL_TYPE', 'TRANSMISSION', etc.
       entityId,
       details,

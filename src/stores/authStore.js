@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 // import { authAPI } from '../services/api'; // Commented for now
-import Logger from '../utils/Logger';
+import Logger from '../utils/logger';
 
 // Mock users for testing
 const MOCK_USERS = [

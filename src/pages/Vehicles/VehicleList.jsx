@@ -6,7 +6,7 @@ import useDriverStore from '../../stores/driverStore';
 import VehicleCard from '../Vehicles/VehicleCard';
 import VehicleDetailsModal from '../Vehicles/VehicleDetailsModal';
 import VehicleFormModal from '../Vehicles/VehicleFormModal';
-import Logger from '../../utils/Logger';
+import Logger from '../../utils/logger';
 
 export default function VehicleList() {
   const [selectedVehicle, setSelectedVehicle] = useState(null);

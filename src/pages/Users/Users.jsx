@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Eye, Edit, Trash2, User, Search, Filter, X, Plus } from 'lucide-react';
 import useUserStore from '../../stores/userStore';
 import useLedgerStore from '../../stores/ledgerStore';
-import Logger from '../../utils/Logger';
+import Logger from '../../utils/logger';
 import UserDetailsModal from '../Users/UserDetailsModal';
 import UserFormModal from '../Users/UserFormModal';
 import UserTableRow from '../Users/UserTableRow';
