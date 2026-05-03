@@ -116,22 +116,12 @@ export default function Sidebar() {
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">FM</span>
-            </div>
-            <span className="text-sm font-semibold text-gray-900">JadeedFleet Pro</span>
-          </div>
-          <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400">
-            <X size={20} />
-          </button>
-        </div>
+       
         <SidebarContent />
       </div>
 
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-30" onClick={() => setIsMobileMenuOpen(false)} />
+        <div className="fixed inset-0 backdrop-blur-md z-30" onClick={() => setIsMobileMenuOpen(false)} />
       )}
     </>
   );
