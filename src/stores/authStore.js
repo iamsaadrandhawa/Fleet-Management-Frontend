@@ -49,15 +49,11 @@ const useAuthStore = create(
       login: async (email, password, rememberMe = false) => {
         set({ isLoading: true, error: null });
         
-        // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Mock login validation
         const mockUser = MOCK_USERS.find(user => user.email === email);
         
-        // Check credentials
         if (mockUser) {
-          // Validate password based on email
           let isValid = false;
           if (email === 'super@fleet.com' && password === 'super123') isValid = true;
           else if (email === 'admin@fleet.com' && password === 'admin123') isValid = true;
@@ -85,7 +81,6 @@ const useAuthStore = create(
           }
         }
         
-        // Login failed
         set({
           error: 'Invalid email or password',
           isLoading: false
@@ -97,7 +92,6 @@ const useAuthStore = create(
         const { user } = get();
         set({ isLoading: true });
         
-        // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 300));
         
         if (user) Logger.logout(user);
@@ -112,32 +106,37 @@ const useAuthStore = create(
         });
       },
 
-      changePassword: async (currentPassword, newPassword) => {
-        set({ isLoading: true, error: null });
-        
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Mock validation
-        const { user } = get();
-        
-        // For mock purposes, accept any current password for demo users
-        if (user && newPassword.length >= 6) {
-          set({ isLoading: false });
-          return { success: true };
-        }
-        
-        set({ 
-          error: 'Password must be at least 6 characters', 
-          isLoading: false 
-        });
-        return { success: false, error: 'Password must be at least 6 characters' };
-      },
+      // In authStore.js, add this method if not already present
+changePassword: async (currentPassword, newPassword) => {
+  set({ isLoading: true, error: null });
+  
+  try {
+    // Call API
+    await authAPI.changePassword({ currentPassword, newPassword });
+    
+    set({ isLoading: false });
+    
+    // Log the activity
+    const { user } = get();
+    Logger.log('UPDATE', 'AUTH', user?.id, { 
+      action: 'PASSWORD_CHANGED', 
+      email: user?.email,
+      name: user?.name
+    });
+    
+    return { success: true };
+  } catch (error) {
+    set({ 
+      error: error.message || 'Failed to change password', 
+      isLoading: false 
+    });
+    return { success: false, error: error.message };
+  }
+},
 
       getProfile: async () => {
         set({ isLoading: true });
         
-        // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 500));
         
         const { user } = get();

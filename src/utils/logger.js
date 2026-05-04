@@ -1,12 +1,41 @@
 import useLogStore from '../stores/logStore';
 import useAuthStore from '../stores/authStore';
 
+// Track recent logs to prevent duplicates
+const recentLogs = new Map();
+
+// Clean up old entries every 10 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentLogs.entries()) {
+    if (now - timestamp > 2000) { // Remove after 2 seconds
+      recentLogs.delete(key);
+    }
+  }
+}, 10000);
+
 class Logger {
   static log(action, entityType, entityId, details = {}) {
+    // Create a unique key for this log
+    const key = `${action}_${entityType}_${entityId}`;
+    const lastTime = recentLogs.get(key);
+    const now = Date.now();
+    
+    // Prevent duplicate logs within 1 second
+    if (lastTime && (now - lastTime) < 1000) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[LOG] Duplicate prevented:', { action, entityType, entityId });
+      }
+      return null;
+    }
+    
+    // Store this log time
+    recentLogs.set(key, now);
+    
     const { user } = useAuthStore.getState();
     
     const logEntry = {
-      action, // 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'LOGOUT', etc. etc
+      action, // 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'LOGOUT', etc.
       entityType, // 'DRIVER', 'VEHICLE', 'USER', 'DESIGNATION', 'LOCATION', 'MAKE', 'FUEL_TYPE', 'TRANSMISSION', etc.
       entityId,
       details,

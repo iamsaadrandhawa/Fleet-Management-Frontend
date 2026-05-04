@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import Logger from '../utils/logger';
 
 const useLedgerStore = create(
   persist(
@@ -55,7 +56,7 @@ const useLedgerStore = create(
         { id: 6, name: 'LPG', code: 'LPG', description: 'Liquefied petroleum gas', status: 'Active' },
       ],
 
-      // ==================== transmissionTypes (FIXED - lowercase) ====================
+      // ==================== TRANSMISSION TYPES ====================
       transmissionTypes: [
         { id: 1, name: 'Automatic', code: 'AT', description: 'Automatic transmission', status: 'Active' },
         { id: 2, name: 'Manual', code: 'MT', description: 'Manual transmission', status: 'Active' },
@@ -69,7 +70,7 @@ const useLedgerStore = create(
       fetchMakes: () => get().makes,
       fetchVehicleCategories: () => get().vehicleCategories,
       fetchFuelTypes: () => get().fuelTypes,
-      fetchtransmissionTypes: () => get().transmissionTypes,
+      fetchTransmissionTypes: () => get().transmissionTypes,
 
       // ==================== GET ACTIVE ITEMS ====================
       getActiveDesignations: () => get().designations.filter(d => d.status === 'Active'),
@@ -77,97 +78,193 @@ const useLedgerStore = create(
       getActiveMakes: () => get().makes.filter(m => m.status === 'Active'),
       getActiveVehicleCategories: () => get().vehicleCategories.filter(c => c.status === 'Active'),
       getActiveFuelTypes: () => get().fuelTypes.filter(f => f.status === 'Active'),
-      getActivetransmissionTypes: () => get().transmissionTypes.filter(t => t.status === 'Active'),
+      getActiveTransmissionTypes: () => get().transmissionTypes.filter(t => t.status === 'Active'),
 
       // ==================== CRUD FOR DESIGNATIONS ====================
-      addDesignation: (item) => set((state) => ({
-        designations: [...state.designations, { ...item, id: Date.now(), status: 'Active' }]
-      })),
+      addDesignation: (item) => {
+        const newItem = { ...item, id: Date.now(), status: 'Active' };
+        set((state) => ({
+          designations: [...state.designations, newItem]
+        }));
+        // ✅ Log the activity
+        Logger.addDesignation(newItem);
+      },
       
-      updateDesignation: (id, updatedData) => set((state) => ({
-        designations: state.designations.map((item) =>
-          item.id === id ? { ...item, ...updatedData } : item
-        )
-      })),
+      updateDesignation: (id, updatedData) => {
+        set((state) => ({
+          designations: state.designations.map((item) =>
+            item.id === id ? { ...item, ...updatedData, updatedAt: new Date().toISOString() } : item
+          )
+        }));
+        // ✅ Log the activity
+        Logger.updateDesignation({ id, ...updatedData });
+      },
       
-      deleteDesignation: (id) => set((state) => ({
-        designations: state.designations.filter((item) => item.id !== id)
-      })),
+      deleteDesignation: (id) => {
+        const itemToDelete = get().designations.find(item => item.id === id);
+        set((state) => ({
+          designations: state.designations.filter((item) => item.id !== id)
+        }));
+        // ✅ Log the activity
+        if (itemToDelete) {
+          Logger.deleteDesignation(id, itemToDelete.name);
+        }
+      },
 
       // ==================== CRUD FOR LOCATIONS ====================
-      addLocation: (item) => set((state) => ({
-        locations: [...state.locations, { ...item, id: Date.now(), status: 'Active' }]
-      })),
+      addLocation: (item) => {
+        const newItem = { ...item, id: Date.now(), status: 'Active' };
+        set((state) => ({
+          locations: [...state.locations, newItem]
+        }));
+        // ✅ Log the activity
+        Logger.addLocation(newItem);
+      },
       
-      updateLocation: (id, updatedData) => set((state) => ({
-        locations: state.locations.map((item) =>
-          item.id === id ? { ...item, ...updatedData } : item
-        )
-      })),
+      updateLocation: (id, updatedData) => {
+        set((state) => ({
+          locations: state.locations.map((item) =>
+            item.id === id ? { ...item, ...updatedData, updatedAt: new Date().toISOString() } : item
+          )
+        }));
+        // ✅ Log the activity
+        Logger.updateLocation({ id, ...updatedData });
+      },
       
-      deleteLocation: (id) => set((state) => ({
-        locations: state.locations.filter((item) => item.id !== id)
-      })),
+      deleteLocation: (id) => {
+        const itemToDelete = get().locations.find(item => item.id === id);
+        set((state) => ({
+          locations: state.locations.filter((item) => item.id !== id)
+        }));
+        // ✅ Log the activity
+        if (itemToDelete) {
+          Logger.deleteLocation(id, itemToDelete.name);
+        }
+      },
 
       // ==================== CRUD FOR MAKES ====================
-      addMake: (item) => set((state) => ({
-        makes: [...state.makes, { ...item, id: Date.now(), status: 'Active' }]
-      })),
+      addMake: (item) => {
+        const newItem = { ...item, id: Date.now(), status: 'Active' };
+        set((state) => ({
+          makes: [...state.makes, newItem]
+        }));
+        // ✅ Log the activity
+        Logger.addMake(newItem);
+      },
       
-      updateMake: (id, updatedData) => set((state) => ({
-        makes: state.makes.map((item) =>
-          item.id === id ? { ...item, ...updatedData } : item
-        )
-      })),
+      updateMake: (id, updatedData) => {
+        set((state) => ({
+          makes: state.makes.map((item) =>
+            item.id === id ? { ...item, ...updatedData, updatedAt: new Date().toISOString() } : item
+          )
+        }));
+        // ✅ Log the activity
+        Logger.updateMake({ id, ...updatedData });
+      },
       
-      deleteMake: (id) => set((state) => ({
-        makes: state.makes.filter((item) => item.id !== id)
-      })),
+      deleteMake: (id) => {
+        const itemToDelete = get().makes.find(item => item.id === id);
+        set((state) => ({
+          makes: state.makes.filter((item) => item.id !== id)
+        }));
+        // ✅ Log the activity
+        if (itemToDelete) {
+          Logger.deleteMake(id, itemToDelete.name);
+        }
+      },
 
       // ==================== CRUD FOR VEHICLE CATEGORIES ====================
-      addVehicleCategory: (item) => set((state) => ({
-        vehicleCategories: [...state.vehicleCategories, { ...item, id: Date.now(), status: 'Active', count: 0 }]
-      })),
+      addVehicleCategory: (item) => {
+        const newItem = { ...item, id: Date.now(), status: 'Active', count: 0 };
+        set((state) => ({
+          vehicleCategories: [...state.vehicleCategories, newItem]
+        }));
+        // ✅ Log the activity
+        Logger.addVehicleCategory(newItem);
+      },
       
-      updateVehicleCategory: (id, updatedData) => set((state) => ({
-        vehicleCategories: state.vehicleCategories.map((item) =>
-          item.id === id ? { ...item, ...updatedData } : item
-        )
-      })),
+      updateVehicleCategory: (id, updatedData) => {
+        set((state) => ({
+          vehicleCategories: state.vehicleCategories.map((item) =>
+            item.id === id ? { ...item, ...updatedData, updatedAt: new Date().toISOString() } : item
+          )
+        }));
+        // ✅ Log the activity
+        Logger.updateVehicleCategory({ id, ...updatedData });
+      },
       
-      deleteVehicleCategory: (id) => set((state) => ({
-        vehicleCategories: state.vehicleCategories.filter((item) => item.id !== id)
-      })),
+      deleteVehicleCategory: (id) => {
+        const itemToDelete = get().vehicleCategories.find(item => item.id === id);
+        set((state) => ({
+          vehicleCategories: state.vehicleCategories.filter((item) => item.id !== id)
+        }));
+        // ✅ Log the activity
+        if (itemToDelete) {
+          Logger.deleteVehicleCategory(id, itemToDelete.name);
+        }
+      },
 
       // ==================== CRUD FOR FUEL TYPES ====================
-      addFuelType: (item) => set((state) => ({
-        fuelTypes: [...state.fuelTypes, { ...item, id: Date.now(), status: 'Active' }]
-      })),
+      addFuelType: (item) => {
+        const newItem = { ...item, id: Date.now(), status: 'Active' };
+        set((state) => ({
+          fuelTypes: [...state.fuelTypes, newItem]
+        }));
+        // ✅ Log the activity
+        Logger.addFuelType(newItem);
+      },
       
-      updateFuelType: (id, updatedData) => set((state) => ({
-        fuelTypes: state.fuelTypes.map((item) =>
-          item.id === id ? { ...item, ...updatedData } : item
-        )
-      })),
+      updateFuelType: (id, updatedData) => {
+        set((state) => ({
+          fuelTypes: state.fuelTypes.map((item) =>
+            item.id === id ? { ...item, ...updatedData, updatedAt: new Date().toISOString() } : item
+          )
+        }));
+        // ✅ Log the activity
+        Logger.updateFuelType({ id, ...updatedData });
+      },
       
-      deleteFuelType: (id) => set((state) => ({
-        fuelTypes: state.fuelTypes.filter((item) => item.id !== id)
-      })),
+      deleteFuelType: (id) => {
+        const itemToDelete = get().fuelTypes.find(item => item.id === id);
+        set((state) => ({
+          fuelTypes: state.fuelTypes.filter((item) => item.id !== id)
+        }));
+        // ✅ Log the activity
+        if (itemToDelete) {
+          Logger.deleteFuelType(id, itemToDelete.name);
+        }
+      },
 
-      // ==================== CRUD FOR transmissionTypes ====================
-      addTransmission: (item) => set((state) => ({
-        transmissionTypes: [...state.transmissionTypes, { ...item, id: Date.now(), status: 'Active' }]
-      })),
+      // ==================== CRUD FOR TRANSMISSION TYPES ====================
+      addTransmission: (item) => {
+        const newItem = { ...item, id: Date.now(), status: 'Active' };
+        set((state) => ({
+          transmissionTypes: [...state.transmissionTypes, newItem]
+        }));
+        // ✅ Log the activity
+        Logger.addTransmission(newItem);
+      },
       
-      updateTransmission: (id, updatedData) => set((state) => ({
-        transmissionTypes: state.transmissionTypes.map((item) =>
-          item.id === id ? { ...item, ...updatedData } : item
-        )
-      })),
+      updateTransmission: (id, updatedData) => {
+        set((state) => ({
+          transmissionTypes: state.transmissionTypes.map((item) =>
+            item.id === id ? { ...item, ...updatedData, updatedAt: new Date().toISOString() } : item
+          )
+        }));
+        // ✅ Log the activity
+        Logger.updateTransmission({ id, ...updatedData });
+      },
       
-      deleteTransmission: (id) => set((state) => ({
-        transmissionTypes: state.transmissionTypes.filter((item) => item.id !== id)
-      })),
+      deleteTransmission: (id) => {
+        const itemToDelete = get().transmissionTypes.find(item => item.id === id);
+        set((state) => ({
+          transmissionTypes: state.transmissionTypes.filter((item) => item.id !== id)
+        }));
+        // ✅ Log the activity
+        if (itemToDelete) {
+          Logger.deleteTransmission(id, itemToDelete.name);
+        }
+      },
     }),
     {
       name: 'ledger-storage',

@@ -1,145 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// Sample initial logs for demo purposes
-const initialLogs = [
-  {
-    id: 1,
-    timestamp: '2024-01-15T10:30:00.000Z',
-    formattedTime: '2024-01-15 10:30 AM',
-    action: 'CREATE',
-    entityType: 'DRIVER',
-    entityId: 101,
-    details: { name: 'John Doe', employeeId: 'EMP-001', phone: '+92 300 1234567' },
-    userId: 1,
-    userName: 'Super Admin',
-    userEmail: 'superadmin@fleet.com',
-    userRole: 'Super Admin',
-  },
-  {
-    id: 2,
-    timestamp: '2024-01-15T09:15:00.000Z',
-    formattedTime: '2024-01-15 09:15 AM',
-    action: 'CREATE',
-    entityType: 'VEHICLE',
-    entityId: 201,
-    details: { make: 'Toyota', model: 'Camry', registrationNumber: 'ABC-123', year: 2023 },
-    userId: 2,
-    userName: 'Admin User',
-    userEmail: 'admin@fleet.com',
-    userRole: 'Admin',
-  },
-  {
-    id: 3,
-    timestamp: '2024-01-14T16:45:00.000Z',
-    formattedTime: '2024-01-14 04:45 PM',
-    action: 'UPDATE',
-    entityType: 'DRIVER',
-    entityId: 102,
-    details: { name: 'Jane Smith', phone: '+92 300 7654321' },
-    userId: 3,
-    userName: 'Fleet Manager',
-    userEmail: 'manager@fleet.com',
-    userRole: 'Manager',
-  },
-  {
-    id: 4,
-    timestamp: '2024-01-14T14:20:00.000Z',
-    formattedTime: '2024-01-14 02:20 PM',
-    action: 'DELETE',
-    entityType: 'VEHICLE',
-    entityId: 202,
-    details: { registrationNumber: 'XYZ-789', make: 'Ford', model: 'Old Model' },
-    userId: 4,
-    userName: 'Data Entry Staff',
-    userEmail: 'staff@fleet.com',
-    userRole: 'Staff',
-  },
-  {
-    id: 5,
-    timestamp: '2024-01-14T11:00:00.000Z',
-    formattedTime: '2024-01-14 11:00 AM',
-    action: 'VIEW',
-    entityType: 'DRIVER',
-    entityId: 103,
-    details: { name: 'Mike Johnson' },
-    userId: 5,
-    userName: 'Audit Viewer',
-    userEmail: 'viewer@fleet.com',
-    userRole: 'Viewer',
-  },
-  {
-    id: 6,
-    timestamp: '2024-01-13T15:30:00.000Z',
-    formattedTime: '2024-01-13 03:30 PM',
-    action: 'CREATE',
-    entityType: 'DRIVER',
-    entityId: 104,
-    details: { name: 'Sarah Williams', employeeId: 'EMP-004', phone: '+92 300 5555555' },
-    userId: 1,
-    userName: 'Super Admin',
-    userEmail: 'superadmin@fleet.com',
-    userRole: 'Super Admin',
-  },
-  {
-    id: 7,
-    timestamp: '2024-01-13T10:00:00.000Z',
-    formattedTime: '2024-01-13 10:00 AM',
-    action: 'UPDATE',
-    entityType: 'VEHICLE',
-    entityId: 203,
-    details: { status: 'Maintenance', registrationNumber: 'DEF-456' },
-    userId: 3,
-    userName: 'Fleet Manager',
-    userEmail: 'manager@fleet.com',
-    userRole: 'Manager',
-  },
-  {
-    id: 8,
-    timestamp: '2024-01-12T09:00:00.000Z',
-    formattedTime: '2024-01-12 09:00 AM',
-    action: 'LOGIN',
-    entityType: 'AUTH',
-    entityId: 1,
-    details: { email: 'superadmin@fleet.com', name: 'Super Admin' },
-    userId: 1,
-    userName: 'Super Admin',
-    userEmail: 'superadmin@fleet.com',
-    userRole: 'Super Admin',
-  },
-  {
-    id: 9,
-    timestamp: '2024-01-11T18:30:00.000Z',
-    formattedTime: '2024-01-11 06:30 PM',
-    action: 'LOGOUT',
-    entityType: 'AUTH',
-    entityId: 2,
-    details: { email: 'admin@fleet.com', name: 'Admin User' },
-    userId: 2,
-    userName: 'Admin User',
-    userEmail: 'admin@fleet.com',
-    userRole: 'Admin',
-  },
-  {
-    id: 10,
-    timestamp: '2024-01-11T14:00:00.000Z',
-    formattedTime: '2024-01-11 02:00 PM',
-    action: 'CREATE',
-    entityType: 'DESIGNATION',
-    entityId: 7,
-    details: { name: 'Senior Dispatcher', code: 'SR-DIS', description: 'Senior dispatcher role' },
-    userId: 1,
-    userName: 'Super Admin',
-    userEmail: 'superadmin@fleet.com',
-    userRole: 'Super Admin',
-  },
-];
-
 const useLogStore = create(
   persist(
     (set, get) => ({
       // State
-      logs: initialLogs, // Initialize with sample logs
+      logs: [], // Start with empty logs
       isLoading: false,
       error: null,
 
@@ -163,7 +29,6 @@ const useLogStore = create(
        * return response.data;
        */
       addLog: (logEntry) => {
-        // For now, using mock implementation
         const newLog = {
           id: Date.now(),
           timestamp: new Date().toISOString(),
@@ -210,7 +75,7 @@ const useLogStore = create(
         //   return [];
         // }
         
-        // Mock implementation
+        // Mock implementation (remove delay if not needed)
         await new Promise(resolve => setTimeout(resolve, 500));
         set({ isLoading: false });
         return get().logs;
@@ -232,7 +97,6 @@ const useLogStore = create(
        * return response.data;
        */
       getLogsByUser: (userId) => {
-        // TODO: Replace with API call
         return get().logs.filter(log => log.userId === userId);
       },
 
@@ -334,8 +198,6 @@ const useLogStore = create(
        * set({ logs: [] });
        */
       clearAllLogs: () => {
-        // TODO: Add API call
-        // await api.delete('/logs');
         set({ logs: [] });
       },
 
@@ -348,8 +210,6 @@ const useLogStore = create(
        * await api.delete(`/logs/${id}`);
        */
       deleteLog: (id) => {
-        // TODO: Add API call
-        // await api.delete(`/logs/${id}`);
         set((state) => ({
           logs: state.logs.filter(log => log.id !== id),
         }));

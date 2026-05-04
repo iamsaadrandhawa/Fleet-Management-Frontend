@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import Logger from '../utils/logger';
 
 const useDriverStore = create(
   persist(
@@ -49,6 +50,10 @@ const useDriverStore = create(
             drivers: [newDriver, ...state.drivers],
             isLoading: false
           }));
+          
+          // ✅ Log the activity
+          Logger.createDriver(newDriver);
+          
           return { success: true, driver: newDriver };
         } catch (error) {
           set({ error: error.message, isLoading: false });
@@ -59,12 +64,20 @@ const useDriverStore = create(
       updateDriver: async (id, driverData) => {
         set({ isLoading: true });
         try {
+          // Get the driver before update for logging
+          const oldDriver = get().drivers.find(driver => driver.id === id);
+          
           set(state => ({
             drivers: state.drivers.map(driver =>
-              driver.id === id ? { ...driver, ...driverData } : driver
+              driver.id === id ? { ...driver, ...driverData, updatedAt: new Date().toISOString() } : driver
             ),
             isLoading: false
           }));
+          
+          // ✅ Log the activity
+          const updatedDriver = { ...oldDriver, ...driverData, id };
+          Logger.updateDriver(updatedDriver);
+          
           return { success: true };
         } catch (error) {
           set({ error: error.message, isLoading: false });
@@ -75,10 +88,19 @@ const useDriverStore = create(
       deleteDriver: async (id) => {
         set({ isLoading: true });
         try {
+          // Get driver details before deletion for logging
+          const driverToDelete = get().drivers.find(driver => driver.id === id);
+          
           set(state => ({
             drivers: state.drivers.filter(driver => driver.id !== id),
             isLoading: false
           }));
+          
+          // ✅ Log the activity
+          if (driverToDelete) {
+            Logger.deleteDriver(id, driverToDelete.fullName);
+          }
+          
           return { success: true };
         } catch (error) {
           set({ error: error.message, isLoading: false });

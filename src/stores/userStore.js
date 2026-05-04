@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import Logger from '../utils/logger';
 
 const useUserStore = create(
   persist(
@@ -11,7 +12,7 @@ const useUserStore = create(
           name: 'Super Admin',
           email: 'superadmin@fleet.com',
           phone: '+92 300 1111111',
-          role: 'Super Admin',  // Changed to match designation name
+          role: 'Super Admin',
           status: 'Active',
           department: 'Management',
           location: 'Head Office',
@@ -24,7 +25,7 @@ const useUserStore = create(
           name: 'Admin User',
           email: 'admin@fleet.com',
           phone: '+92 300 2222222',
-          role: 'Admin',  // Changed to match designation name
+          role: 'Admin',
           status: 'Active',
           department: 'Management',
           location: 'Head Office',
@@ -37,27 +38,26 @@ const useUserStore = create(
           name: 'Regular User',
           email: 'user@fleet.com',
           phone: '+92 300 3333333',
-          role: 'Staff',  // Changed to match designation name
+          role: 'Staff',
           status: 'Active',
           department: 'Operations',
           location: 'Karachi',
           joiningDate: '2023-06-01',
           lastLogin: 'Never',
         },
-          {
+        {
           id: 4,
           userId: 'USR-004',
           name: 'Viewer User',
           email: 'viewer@fleet.com',
           phone: '+92 300 4444444',
-          role: 'Viewer',  // Changed to match designation name
+          role: 'Viewer',
           status: 'Active',
           department: 'Operations',
           location: 'Karachi',
           joiningDate: '2023-06-01',
           lastLogin: 'Never',
         },
-      
       ],
       isLoading: false,
       error: null,
@@ -81,6 +81,10 @@ const useUserStore = create(
             users: [...state.users, newUser],
             isLoading: false
           }));
+          
+          // ✅ Log the activity
+          Logger.createUser(newUser);
+          
           return { success: true, user: newUser };
         } catch (error) {
           set({ error: error.message, isLoading: false });
@@ -91,12 +95,20 @@ const useUserStore = create(
       updateUser: async (id, userData) => {
         set({ isLoading: true });
         try {
+          // Get the user before update for logging
+          const oldUser = get().users.find(user => user.id === id);
+          
           set(state => ({
             users: state.users.map(user =>
               user.id === id ? { ...user, ...userData, updatedAt: new Date().toISOString() } : user
             ),
             isLoading: false
           }));
+          
+          // ✅ Log the activity
+          const updatedUser = { ...oldUser, ...userData, id };
+          Logger.updateUser(updatedUser);
+          
           return { success: true };
         } catch (error) {
           set({ error: error.message, isLoading: false });
@@ -107,10 +119,19 @@ const useUserStore = create(
       deleteUser: async (id) => {
         set({ isLoading: true });
         try {
+          // Get user details before deletion for logging
+          const userToDelete = get().users.find(user => user.id === id);
+          
           set(state => ({
             users: state.users.filter(user => user.id !== id),
             isLoading: false
           }));
+          
+          // ✅ Log the activity
+          if (userToDelete) {
+            Logger.deleteUser(id, userToDelete.name);
+          }
+          
           return { success: true };
         } catch (error) {
           set({ error: error.message, isLoading: false });
