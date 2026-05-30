@@ -1,22 +1,27 @@
+// VehicleFormModal.jsx - Fixed input handling
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
-export default function VehicleFormModal({ 
-  isEditing, 
-  vehicle, 
-  onSubmit, 
+export default function VehicleFormModal({
+  isEditing,
+  vehicle,
+  onSubmit,
   onClose,
   makes,
   fuelTypes,
   transmissions,
   vehicleCategories,
-  drivers
+  drivers,
+  roles,
+  designations,
+  locations,
 }) {
-  const [formData, setFormData] = useState({
-    vehicleId: vehicle?.vehicleId || '',
+  // Initialize form data - use useMemo to prevent unnecessary re-renders
+  const initialFormData = useMemo(() => ({
+    vehicleId: vehicle?.vehicleId || vehicle?._id || '',
     registrationNumber: vehicle?.registrationNumber || '',
     model: vehicle?.model || '',
-    make: vehicle?.make || '',
+    make: vehicle?.make || vehicle?.company || '',
     year: vehicle?.year || '',
     color: vehicle?.color || '',
     fuelType: vehicle?.fuelType || '',
@@ -24,395 +29,440 @@ export default function VehicleFormModal({
     seatingCapacity: vehicle?.seatingCapacity || '',
     chassisNumber: vehicle?.chassisNumber || '',
     engineNumber: vehicle?.engineNumber || '',
-    registrationDate: vehicle?.registrationDate || '',
-    insuranceExpiry: vehicle?.insuranceExpiry || '',
-    fitnessExpiry: vehicle?.fitnessExpiry || '',
-    pollutionExpiry: vehicle?.pollutionExpiry || '',
-    assignedDriver: vehicle?.assignedDriver || '',
-    purchaseDate: vehicle?.purchaseDate || '',
+    registrationDate: vehicle?.registrationDate
+      ? vehicle.registrationDate.slice(0, 10)
+      : '',
+    insuranceExpiry: vehicle?.insuranceExpiry
+      ? vehicle.insuranceExpiry.slice(0, 10)
+      : '',
+    fitnessExpiry: vehicle?.fitnessExpiry
+      ? vehicle.fitnessExpiry.slice(0, 10)
+      : '',
+    pollutionExpiry: vehicle?.pollutionExpiry
+      ? vehicle.pollutionExpiry.slice(0, 10)
+      : '',
+    assignedDriver: vehicle?.assignedDriver || vehicle?.assignedTo?._id || '',
+    purchaseDate: vehicle?.purchaseDate
+      ? vehicle.purchaseDate.slice(0, 10)
+      : '',
     purchasePrice: vehicle?.purchasePrice || '',
-    status: vehicle?.status || 'Active',
+    status: vehicle?.status || 'active',
     vehicleCategory: vehicle?.vehicleCategory || '',
-  });
+  }), [vehicle]);
 
+  const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
 
-  const handleChange = (e) => {
+  // Handle input changes - use callback to prevent recreation
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors({ ...errors, [name]: '' });
+      setErrors(prev => ({ ...prev, [name]: '' }));
     }
-  };
+  }, [errors]);
 
-  const validateForm = () => {
+  // Get active items - memoized to prevent recalculation on every render
+  const getActiveItems = useCallback((items) => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const hasStatusField = items.some(item => item.status !== undefined && item.status !== null);
+    if (!hasStatusField) return items;
+    return items.filter(item => {
+      if (item.status === undefined || item.status === null) return true;
+      const s = String(item.status).toLowerCase().trim();
+      return s === 'active' || s === '1' || s === 'true';
+    });
+  }, []);
+
+  // Pre-computed active lists with useMemo
+  const activeMakes = useMemo(() => getActiveItems(makes), [makes, getActiveItems]);
+  const activeFuelTypes = useMemo(() => getActiveItems(fuelTypes), [fuelTypes, getActiveItems]);
+  const activeTransmissions = useMemo(() => getActiveItems(transmissions), [transmissions, getActiveItems]);
+  const activeVehicleCategories = useMemo(() => getActiveItems(vehicleCategories), [vehicleCategories, getActiveItems]);
+  const activeDrivers = useMemo(() => getActiveItems(drivers), [drivers, getActiveItems]);
+
+  const statuses = useMemo(() => ['active', 'inactive', 'in maintenance', 'out of service'], []);
+
+  // Validate form
+  const validateForm = useCallback(() => {
     const newErrors = {};
     if (!formData.registrationNumber) newErrors.registrationNumber = 'Registration number is required';
     if (!formData.model) newErrors.model = 'Model is required';
     if (!formData.make) newErrors.make = 'Make is required';
     if (!formData.year) newErrors.year = 'Year is required';
-    if (!formData.color) newErrors.color = 'Color is required';
     if (!formData.fuelType) newErrors.fuelType = 'Fuel type is required';
+    if (!formData.vehicleCategory) newErrors.vehicleCategory = 'Vehicle category is required';
     if (!formData.chassisNumber) newErrors.chassisNumber = 'Chassis number is required';
     if (!formData.engineNumber) newErrors.engineNumber = 'Engine number is required';
-    if (!formData.vehicleCategory) newErrors.vehicleCategory = 'Vehicle category is required';
-    
+
     const currentYear = new Date().getFullYear();
-    if (formData.year && (formData.year < 1990 || formData.year > currentYear + 1)) {
+    if (formData.year && (Number(formData.year) < 1990 || Number(formData.year) > currentYear + 1)) {
       newErrors.year = `Year must be between 1990 and ${currentYear + 1}`;
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData]);
 
-  const handleSubmit = (e) => {
+  // Handle submit
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
     if (validateForm()) {
       onSubmit(formData);
     }
-  };
+  }, [validateForm, onSubmit, formData]);
 
-  const activeMakes = makes?.filter(m => m.status === 'Active') || [];
-  const activeFuelTypes = fuelTypes?.filter(f => f.status === 'Active') || [];
-  const activeTransmissions = transmissions?.filter(t => t.status === 'Active') || [];
-  const activeVehicleCategories = vehicleCategories?.filter(c => c.status === 'Active') || [];
-  const activeDrivers = drivers?.filter(d => d.status === 'Active') || [];
-  const statuses = ['Active', 'Maintenance', 'Repair', 'Inactive'];
+  // Reusable field component as a separate component to prevent re-renders
+  const Field = useCallback(({ label, required, error, children }) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+  ), []);
+
+  const inputClass = useCallback((error) => 
+    `w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+      error ? 'border-red-400' : 'border-gray-300'
+    }`,
+  []);
+
+  const emptyHint = useCallback((list, label) => 
+    list.length === 0 ? (
+      <p className="text-amber-500 text-xs mt-1">
+        No {label} available. Add them in the Ledger section.
+      </p>
+    ) : null,
+  []);
 
   return (
-    <div className="fixed inset-0 backdrop-blur-md bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">
             {isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 transition"
           >
             <X size={20} />
           </button>
         </div>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Vehicle ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle ID</label>
-                <input
-                  type="text"
-                  name="vehicleId"
-                  value={formData.vehicleId}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="VH-001"
-                  disabled={isEditing}
-                />
-              </div>
 
-              {/* Registration Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Registration Number *</label>
-                <input
-                  type="text"
-                  name="registrationNumber"
-                  value={formData.registrationNumber}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="ABC-123"
-                />
-                {errors.registrationNumber && <p className="text-red-500 text-xs mt-1">{errors.registrationNumber}</p>}
-              </div>
+        {/* Scrollable body */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="overflow-y-auto flex-1 p-6 space-y-8">
+            {/* ── Section 1: Basic Information ── */}
+            <section>
+              <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                Basic Information
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Vehicle ID */}
+                <Field label="Vehicle ID">
+                  <input
+                    type="text"
+                    name="vehicleId"
+                    value={formData.vehicleId}
+                    onChange={handleChange}
+                    disabled={isEditing}
+                    placeholder="VH-001"
+                    className={`${inputClass(false)} ${
+                      isEditing ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''
+                    }`}
+                  />
+                </Field>
 
-              {/* Make */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Make *</label>
-                <select
-                  name="make"
-                  value={formData.make}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.make ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Select Make</option>
-                  {activeMakes.map(m => (
-                    <option key={m.id} value={m.name}>{m.name}</option>
-                  ))}
-                </select>
-                {errors.make && <p className="text-red-500 text-xs mt-1">{errors.make}</p>}
-              </div>
+                {/* Registration Number */}
+                <Field label="Registration Number" required error={errors.registrationNumber}>
+                  <input
+                    type="text"
+                    name="registrationNumber"
+                    value={formData.registrationNumber}
+                    onChange={handleChange}
+                    placeholder="ABC-123"
+                    className={inputClass(errors.registrationNumber)}
+                  />
+                </Field>
 
-              {/* Model */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Model *</label>
-                <input
-                  type="text"
-                  name="model"
-                  value={formData.model}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.model ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="Camry"
-                />
-                {errors.model && <p className="text-red-500 text-xs mt-1">{errors.model}</p>}
-              </div>
+                {/* Make */}
+                <Field label="Make" required error={errors.make}>
+                  <select
+                    name="make"
+                    value={formData.make}
+                    onChange={handleChange}
+                    className={inputClass(errors.make)}
+                  >
+                    <option value="">Select Make</option>
+                    {activeMakes.map((m) => (
+                      <option key={m._id || m.id} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  {emptyHint(activeMakes, 'makes')}
+                </Field>
 
-              {/* Year */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Year *</label>
-                <input
-                  type="number"
-                  name="year"
-                  value={formData.year}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.year ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="2023"
-                />
-                {errors.year && <p className="text-red-500 text-xs mt-1">{errors.year}</p>}
-              </div>
+                {/* Model */}
+                <Field label="Model" required error={errors.model}>
+                  <input
+                    type="text"
+                    name="model"
+                    value={formData.model}
+                    onChange={handleChange}
+                    placeholder="e.g. Camry"
+                    className={inputClass(errors.model)}
+                  />
+                </Field>
 
-              {/* Color */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Color *</label>
-                <input
-                  type="text"
-                  name="color"
-                  value={formData.color}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.color ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="White"
-                />
-                {errors.color && <p className="text-red-500 text-xs mt-1">{errors.color}</p>}
-              </div>
+                {/* Year */}
+                <Field label="Year" required error={errors.year}>
+                  <input
+                    type="number"
+                    name="year"
+                    value={formData.year}
+                    onChange={handleChange}
+                    placeholder={String(new Date().getFullYear())}
+                    className={inputClass(errors.year)}
+                  />
+                </Field>
 
-              {/* Fuel Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Type *</label>
-                <select
-                  name="fuelType"
-                  value={formData.fuelType}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.fuelType ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Select Fuel Type</option>
-                  {activeFuelTypes.map(fuel => (
-                    <option key={fuel.id} value={fuel.name}>{fuel.name}</option>
-                  ))}
-                </select>
-                {errors.fuelType && <p className="text-red-500 text-xs mt-1">{errors.fuelType}</p>}
-              </div>
+                {/* Color */}
+                <Field label="Color">
+                  <input
+                    type="text"
+                    name="color"
+                    value={formData.color}
+                    onChange={handleChange}
+                    placeholder="White"
+                    className={inputClass(false)}
+                  />
+                </Field>
 
-              {/* Transmission */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Transmission</label>
-                <select
-                  name="transmission"
-                  value={formData.transmission}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">Select Transmission</option>
-                  {activeTransmissions.map(trans => (
-                    <option key={trans.id} value={trans.name}>{trans.name}</option>
-                  ))}
-                </select>
-              </div>
+                {/* Fuel Type */}
+                <Field label="Fuel Type" required error={errors.fuelType}>
+                  <select
+                    name="fuelType"
+                    value={formData.fuelType}
+                    onChange={handleChange}
+                    className={inputClass(errors.fuelType)}
+                  >
+                    <option value="">Select Fuel Type</option>
+                    {activeFuelTypes.map((f) => (
+                      <option key={f._id || f.id} value={f.name}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                  {emptyHint(activeFuelTypes, 'fuel types')}
+                </Field>
 
-              {/* Seating Capacity */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Seating Capacity</label>
-                <input
-                  type="number"
-                  name="seatingCapacity"
-                  value={formData.seatingCapacity}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="4"
-                />
-              </div>
+                {/* Transmission */}
+                <Field label="Transmission">
+                  <select
+                    name="transmission"
+                    value={formData.transmission}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  >
+                    <option value="">Select Transmission</option>
+                    {activeTransmissions.map((t) => (
+                      <option key={t._id || t.id} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  {emptyHint(activeTransmissions, 'transmissions')}
+                </Field>
 
-              {/* Vehicle Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Category *</label>
-                <select
-                  name="vehicleCategory"
-                  value={formData.vehicleCategory}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.vehicleCategory ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Select Category</option>
-                  {activeVehicleCategories.map(cat => (
-                    <option key={cat.id} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
-                {errors.vehicleCategory && <p className="text-red-500 text-xs mt-1">{errors.vehicleCategory}</p>}
-              </div>
+                {/* Seating Capacity */}
+                <Field label="Seating Capacity">
+                  <input
+                    type="number"
+                    name="seatingCapacity"
+                    value={formData.seatingCapacity}
+                    onChange={handleChange}
+                    placeholder="4"
+                    min="1"
+                    className={inputClass(false)}
+                  />
+                </Field>
 
-              {/* Status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  {statuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
+                {/* Vehicle Category */}
+                <Field label="Vehicle Category" required error={errors.vehicleCategory}>
+                  <select
+                    name="vehicleCategory"
+                    value={formData.vehicleCategory}
+                    onChange={handleChange}
+                    className={inputClass(errors.vehicleCategory)}
+                  >
+                    <option value="">Select Category</option>
+                    {activeVehicleCategories.map((c) => (
+                      <option key={c._id || c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  {emptyHint(activeVehicleCategories, 'vehicle categories')}
+                </Field>
 
-              {/* Chassis Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Chassis Number *</label>
-                <input
-                  type="text"
-                  name="chassisNumber"
-                  value={formData.chassisNumber}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.chassisNumber ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="CH-123456789"
-                />
-                {errors.chassisNumber && <p className="text-red-500 text-xs mt-1">{errors.chassisNumber}</p>}
-              </div>
+                {/* Status */}
+                <Field label="Status">
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  >
+                    {statuses.map((s) => (
+                      <option key={s} value={s}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-              {/* Engine Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Engine Number *</label>
-                <input
-                  type="text"
-                  name="engineNumber"
-                  value={formData.engineNumber}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.engineNumber ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="EN-123456789"
-                />
-                {errors.engineNumber && <p className="text-red-500 text-xs mt-1">{errors.engineNumber}</p>}
+                {/* Assigned Driver */}
+                <Field label="Assigned Driver">
+                  <select
+                    name="assignedDriver"
+                    value={formData.assignedDriver}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  >
+                    <option value="">Select Driver</option>
+                    {activeDrivers.map((d) => (
+                      <option key={d._id || d.id} value={d._id || d.id}>
+                        {d.name || d.fullName}
+                        {d.employeeId ? ` (${d.employeeId})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {emptyHint(activeDrivers, 'drivers')}
+                </Field>
               </div>
+            </section>
 
-              {/* Registration Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Registration Date</label>
-                <input
-                  type="date"
-                  name="registrationDate"
-                  value={formData.registrationDate}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
+            {/* ── Section 2: Identification Numbers ── */}
+            <section>
+              <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                Vehicle Identification Numbers
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Chassis Number */}
+                <Field label="Chassis Number" required error={errors.chassisNumber}>
+                  <input
+                    type="text"
+                    name="chassisNumber"
+                    value={formData.chassisNumber}
+                    onChange={handleChange}
+                    placeholder="CH-123456789"
+                    className={inputClass(errors.chassisNumber)}
+                  />
+                </Field>
 
-              {/* Insurance Expiry */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiry</label>
-                <input
-                  type="date"
-                  name="insuranceExpiry"
-                  value={formData.insuranceExpiry}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
+                {/* Engine Number */}
+                <Field label="Engine Number" required error={errors.engineNumber}>
+                  <input
+                    type="text"
+                    name="engineNumber"
+                    value={formData.engineNumber}
+                    onChange={handleChange}
+                    placeholder="EN-123456789"
+                    className={inputClass(errors.engineNumber)}
+                  />
+                </Field>
               </div>
+            </section>
 
-              {/* Fitness Expiry */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fitness Expiry</label>
-                <input
-                  type="date"
-                  name="fitnessExpiry"
-                  value={formData.fitnessExpiry}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
+            {/* ── Section 3: Important Dates ── */}
+            <section>
+              <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                Important Dates
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="Registration Date">
+                  <input
+                    type="date"
+                    name="registrationDate"
+                    value={formData.registrationDate}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  />
+                </Field>
 
-              {/* Pollution Expiry */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pollution Expiry</label>
-                <input
-                  type="date"
-                  name="pollutionExpiry"
-                  value={formData.pollutionExpiry}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
+                <Field label="Insurance Expiry">
+                  <input
+                    type="date"
+                    name="insuranceExpiry"
+                    value={formData.insuranceExpiry}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  />
+                </Field>
 
-              {/* Assigned Driver */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Driver</label>
-                <select
-                  name="assignedDriver"
-                  value={formData.assignedDriver}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">Select Driver</option>
-                  {activeDrivers.map(driver => (
-                    <option key={driver.id} value={driver.fullName}>
-                      {driver.fullName} ({driver.employeeId})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <Field label="Fitness Expiry">
+                  <input
+                    type="date"
+                    name="fitnessExpiry"
+                    value={formData.fitnessExpiry}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  />
+                </Field>
 
-              {/* Purchase Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
-                <input
-                  type="date"
-                  name="purchaseDate"
-                  value={formData.purchaseDate}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
+                <Field label="Pollution Expiry">
+                  <input
+                    type="date"
+                    name="pollutionExpiry"
+                    value={formData.pollutionExpiry}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  />
+                </Field>
 
-              {/* Purchase Price */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price</label>
-                <input
-                  type="text"
-                  name="purchasePrice"
-                  value={formData.purchasePrice}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="$ 25,000"
-                />
+                <Field label="Purchase Date">
+                  <input
+                    type="date"
+                    name="purchaseDate"
+                    value={formData.purchaseDate}
+                    onChange={handleChange}
+                    className={inputClass(false)}
+                  />
+                </Field>
+
+                <Field label="Purchase Price">
+                  <input
+                    type="text"
+                    name="purchasePrice"
+                    value={formData.purchasePrice}
+                    onChange={handleChange}
+                    placeholder="25000"
+                    className={inputClass(false)}
+                  />
+                </Field>
               </div>
-            </div>
+            </section>
           </div>
 
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+          {/* Footer */}
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              className="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition text-sm font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm font-medium"
             >
               {isEditing ? 'Update Vehicle' : 'Add Vehicle'}
             </button>

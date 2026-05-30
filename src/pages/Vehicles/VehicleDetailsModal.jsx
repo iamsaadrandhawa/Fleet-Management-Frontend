@@ -33,13 +33,13 @@ export default function VehicleDetailsModal({ vehicle, onClose, onEdit, getStatu
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-gray-700 border-b pb-1">Basic Information</h4>
-              <div><label className="text-xs text-gray-500">Vehicle ID</label><p className="text-sm text-gray-900">{vehicle.vehicleId}</p></div>
+              <div><label className="text-xs text-gray-500">Vehicle ID</label><p className="text-sm text-gray-900">{vehicle._id}</p></div>
               <div><label className="text-xs text-gray-500">Registration Number</label><p className="text-sm text-gray-900">{vehicle.registrationNumber}</p></div>
-              <div><label className="text-xs text-gray-500">Make</label><p className="text-sm text-gray-900">{vehicle.make}</p></div>
+              <div><label className="text-xs text-gray-500">Make</label><p className="text-sm text-gray-900">{vehicle.company}</p></div>
               <div><label className="text-xs text-gray-500">Model</label><p className="text-sm text-gray-900">{vehicle.model}</p></div>
               <div><label className="text-xs text-gray-500">Year</label><p className="text-sm text-gray-900">{vehicle.year}</p></div>
               <div><label className="text-xs text-gray-500">Color</label><p className="text-sm text-gray-900">{vehicle.color}</p></div>
-              <div><label className="text-xs text-gray-500">Vehicle Category</label><p className="text-sm text-gray-900">{vehicle.vehicleCategory}</p></div>
+              <div><label className="text-xs text-gray-500">Vehicle Category</label><p className="text-sm text-gray-900">{vehicle.vehicleCategories}</p></div>
             </div>
 
             <div className="space-y-3">
@@ -49,6 +49,8 @@ export default function VehicleDetailsModal({ vehicle, onClose, onEdit, getStatu
               <div><label className="text-xs text-gray-500">Seating Capacity</label><p className="text-sm text-gray-900">{vehicle.seatingCapacity}</p></div>
               <div><label className="text-xs text-gray-500">Chassis Number</label><p className="text-sm text-gray-900">{vehicle.chassisNumber}</p></div>
               <div><label className="text-xs text-gray-500">Engine Number</label><p className="text-sm text-gray-900">{vehicle.engineNumber}</p></div>
+              <div><label className="text-xs text-gray-500">Meter Reading</label><p className="text-sm text-gray-900">{vehicle.meterReading}</p></div>
+         
             </div>
 
             <div className="space-y-3">

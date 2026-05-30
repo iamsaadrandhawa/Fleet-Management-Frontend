@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Upload, X, FileText, Car, Gauge } from 'lucide-react';
 import useVehicleStore from '../../stores/vehicleStore';
 import useLedgerStore from '../../stores/ledgerStore';
 import useDriverStore from '../../stores/driverStore';
@@ -18,6 +18,7 @@ export default function AddVehicle() {
     seatingCapacity: '',
     chassisNumber: '',
     engineNumber: '',
+    meterReading: '', // Added meterReading field
     registrationDate: '',
     insuranceExpiry: '',
     fitnessExpiry: '',
@@ -25,7 +26,7 @@ export default function AddVehicle() {
     assignedDriver: '',
     purchaseDate: '',
     purchasePrice: '',
-    status: 'Active',
+    status: 'active',
     vehicleCategory: '',
   });
 
@@ -33,51 +34,81 @@ export default function AddVehicle() {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get data from stores
-  const { addVehicle, isLoading } = useVehicleStore();
+  const { addVehicle } = useVehicleStore();
   const { 
     makes, 
     fuelTypes, 
-    transmissionTypes, 
+    transmissionTypes: transmissions,
     vehicleCategories,
     fetchMakes, 
     fetchFuelTypes, 
-    fetchTransmissionTypes,
+    fetchTransmissions,
     fetchVehicleCategories 
   } = useLedgerStore();
   const { drivers, fetchDrivers } = useDriverStore();
 
   // Fetch data on component mount
   useEffect(() => {
-    if (fetchMakes) fetchMakes();
-    if (fetchFuelTypes) fetchFuelTypes();
-    if (fetchTransmissionTypes) fetchTransmissionTypes();
-    if (fetchVehicleCategories) fetchVehicleCategories();
-    if (fetchDrivers) fetchDrivers();
+    const loadData = async () => {
+      await Promise.all([
+        fetchMakes(),
+        fetchFuelTypes(),
+        fetchTransmissions(),
+        fetchVehicleCategories(),
+        fetchDrivers()
+      ]);
+    };
+    loadData();
   }, []);
 
-  // Get active options from stores
-  const activeMakes = makes?.filter(m => m.status === 'Active') || [];
-  const activeFuelTypes = fuelTypes?.filter(f => f.status === 'Active') || [];
-  const activeTransmissions = transmissionTypes?.filter(t => t.status === 'Active') || [];
-  const activeStatuses = ['Active', 'Inactive'];
-  const activeVehicleCategories = vehicleCategories?.filter(c => c.status === 'Active') || [];
-  const activeDrivers = drivers?.filter(d => d.status === 'Active') || [];
+  // Get active options from stores with useMemo
+  const activeMakes = useMemo(() => 
+    makes?.filter(m => m.status === 'active' || m.status === 'Active') || [], 
+    [makes]
+  );
+  
+  const activeFuelTypes = useMemo(() => 
+    fuelTypes?.filter(f => f.status === 'active' || f.status === 'Active') || [], 
+    [fuelTypes]
+  );
+  
+  const activeTransmissions = useMemo(() => 
+    transmissions?.filter(t => t.status === 'active' || t.status === 'Active') || [], 
+    [transmissions]
+  );
+  
+  const activeVehicleCategories = useMemo(() => 
+    vehicleCategories?.filter(c => c.status === 'active' || c.status === 'Active') || [], 
+    [vehicleCategories]
+  );
+  
+  const activeDrivers = useMemo(() => 
+    drivers?.filter(d => d.status === 'active' || d.status === 'Active') || [], 
+    [drivers]
+  );
 
+  const statuses = useMemo(() => ['active', 'inactive', 'in maintenance', 'out of service'], []);
 
+  // Generate vehicle ID
+  const generateVehicleId = useCallback(() => {
+    const randomNum = Math.floor(Math.random() * 1000);
+    return `VH-${String(randomNum).padStart(3, '0')}`;
+  }, []);
 
   // Handle text input changes
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors({ ...errors, [name]: '' });
+      setErrors(prev => ({ ...prev, [name]: '' }));
     }
-  };
+  }, [errors]);
 
   // Handle vehicle images upload
-  const handleImageUpload = (e) => {
+  const handleImageUpload = useCallback((e) => {
     const files = Array.from(e.target.files);
     const validImages = [];
     const invalidImages = [];
@@ -88,8 +119,9 @@ export default function AddVehicle() {
       } else if (!file.type.startsWith('image/')) {
         invalidImages.push(`${file.name} (not an image)`);
       } else {
+        const imageId = Date.now() + Math.random();
         validImages.push({
-          id: Date.now() + Math.random(),
+          id: imageId,
           file,
           name: file.name,
           type: file.type,
@@ -98,27 +130,27 @@ export default function AddVehicle() {
         
         const reader = new FileReader();
         reader.onloadend = () => {
-          setImagePreviews(prev => [...prev, { id: Date.now() + Math.random(), url: reader.result }]);
+          setImagePreviews(prev => [...prev, { id: imageId, url: reader.result }]);
         };
         reader.readAsDataURL(file);
       }
     });
 
     if (invalidImages.length > 0) {
-      setErrors({ ...errors, images: `Invalid files: ${invalidImages.join(', ')}` });
+      setErrors(prev => ({ ...prev, images: `Invalid files: ${invalidImages.join(', ')}` }));
     }
 
-    setVehicleImages([...vehicleImages, ...validImages]);
-  };
+    setVehicleImages(prev => [...prev, ...validImages]);
+  }, []);
 
   // Remove vehicle image
-  const removeImage = (id) => {
-    setVehicleImages(vehicleImages.filter(img => img.id !== id));
-    setImagePreviews(imagePreviews.filter(preview => preview.id !== id));
-  };
+  const removeImage = useCallback((id) => {
+    setVehicleImages(prev => prev.filter(img => img.id !== id));
+    setImagePreviews(prev => prev.filter(preview => preview.id !== id));
+  }, []);
 
   // Handle document upload
-  const handleDocumentUpload = (e) => {
+  const handleDocumentUpload = useCallback((e) => {
     const files = Array.from(e.target.files);
     const validFiles = [];
     const invalidFiles = [];
@@ -139,27 +171,27 @@ export default function AddVehicle() {
     });
 
     if (invalidFiles.length > 0) {
-      setErrors({ ...errors, documents: `Invalid files: ${invalidFiles.join(', ')}` });
+      setErrors(prev => ({ ...prev, documents: `Invalid files: ${invalidFiles.join(', ')}` }));
     }
 
-    setDocuments([...documents, ...validFiles]);
-  };
+    setDocuments(prev => [...prev, ...validFiles]);
+  }, []);
 
   // Remove document
-  const removeDocument = (id) => {
-    setDocuments(documents.filter(doc => doc.id !== id));
-  };
+  const removeDocument = useCallback((id) => {
+    setDocuments(prev => prev.filter(doc => doc.id !== id));
+  }, []);
 
   // Validate form
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const newErrors = {};
     
     if (!formData.registrationNumber) newErrors.registrationNumber = 'Registration number is required';
     if (!formData.model) newErrors.model = 'Model is required';
     if (!formData.make) newErrors.make = 'Make is required';
     if (!formData.year) newErrors.year = 'Year is required';
-    if (!formData.color) newErrors.color = 'Color is required';
     if (!formData.fuelType) newErrors.fuelType = 'Fuel type is required';
+    if (!formData.meterReading) newErrors.meterReading = 'Meter reading is required';
     if (!formData.chassisNumber) newErrors.chassisNumber = 'Chassis number is required';
     if (!formData.engineNumber) newErrors.engineNumber = 'Engine number is required';
     if (!formData.vehicleCategory) newErrors.vehicleCategory = 'Vehicle category is required';
@@ -169,24 +201,34 @@ export default function AddVehicle() {
       newErrors.year = `Year must be between 1990 and ${currentYear + 1}`;
     }
     
+    // Validate meterReading is a positive number
+    if (formData.meterReading && (formData.meterReading < 0 || isNaN(formData.meterReading))) {
+      newErrors.meterReading = 'Meter reading must be a positive number';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData]);
 
-  const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (validateForm()) {
-    // Generate vehicle ID if empty
-    if (!formData.vehicleId) {
-      const generateVehicleId = () => {
-        const randomNum = Math.floor(Math.random() * 1000);
-        return `VH-${String(randomNum).padStart(3, '0')}`;
-      };
-      formData.vehicleId = generateVehicleId();
+  // Handle submit
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
     }
-
+    
+    setIsSubmitting(true);
+    
+    // Generate vehicle ID if empty
+    const vehicleId = formData.vehicleId || generateVehicleId();
+    
     const vehicleData = {
       ...formData,
+      vehicleId,
+      vehicleNumber: vehicleId,
+      company: formData.make,
+      meterReading: parseFloat(formData.meterReading) || 0, // Ensure it's a number
       images: vehicleImages.map(img => img.name),
       documents: documents.map(doc => doc.name),
       createdAt: new Date().toISOString()
@@ -195,14 +237,15 @@ export default function AddVehicle() {
     const result = await addVehicle(vehicleData);
     
     if (result.success) {
-      // Log the activity with logger
+      // Log the activity
       logger.createVehicle({
         id: result.vehicle?.id || Date.now(),
         make: vehicleData.make,
         model: vehicleData.model,
         registrationNumber: vehicleData.registrationNumber,
         year: vehicleData.year,
-        vehicleCategory: vehicleData.vehicleCategory
+        vehicleCategory: vehicleData.vehicleCategory,
+        meterReading: vehicleData.meterReading
       });
       
       alert('Vehicle added successfully!');
@@ -220,6 +263,7 @@ export default function AddVehicle() {
         seatingCapacity: '',
         chassisNumber: '',
         engineNumber: '',
+        meterReading: '',
         registrationDate: '',
         insuranceExpiry: '',
         fitnessExpiry: '',
@@ -227,7 +271,7 @@ export default function AddVehicle() {
         assignedDriver: '',
         purchaseDate: '',
         purchasePrice: '',
-        status: 'Active',
+        status: 'active',
         vehicleCategory: '',
       });
       setVehicleImages([]);
@@ -236,17 +280,20 @@ export default function AddVehicle() {
     } else {
       alert('Error adding vehicle: ' + (result.error || 'Unknown error'));
     }
-  }
-};
+    
+    setIsSubmitting(false);
+  }, [formData, validateForm, addVehicle, generateVehicleId, vehicleImages, documents]);
 
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Vehicle Images Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Vehicle Images</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <Upload size={20} className="text-blue-600" />
+            Vehicle Images
+          </h2>
           
           <div className="mb-4">
             <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition inline-flex items-center gap-2">
@@ -268,7 +315,7 @@ export default function AddVehicle() {
           {imagePreviews.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               {imagePreviews.map((preview, idx) => (
-                <div key={preview.id} className="relative">
+                <div key={preview.id} className="relative group">
                   <img
                     src={preview.url}
                     alt={`Vehicle ${idx + 1}`}
@@ -276,8 +323,8 @@ export default function AddVehicle() {
                   />
                   <button
                     type="button"
-                    onClick={() => removeImage(vehicleImages[idx]?.id)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    onClick={() => removeImage(preview.id)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition opacity-0 group-hover:opacity-100"
                   >
                     <X size={14} />
                   </button>
@@ -289,7 +336,10 @@ export default function AddVehicle() {
 
         {/* Basic Information Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Basic Information</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <Car size={20} className="text-blue-600" />
+            Basic Information
+          </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Vehicle ID */}
@@ -303,10 +353,16 @@ export default function AddVehicle() {
                   name="vehicleId"
                   value={formData.vehicleId}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="VH-001"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                  placeholder="VH-001 (Auto-generated if empty)"
                 />
-               
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, vehicleId: generateVehicleId() }))}
+                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
+                >
+                  Generate
+                </button>
               </div>
             </div>
 
@@ -320,7 +376,7 @@ export default function AddVehicle() {
                 name="registrationNumber"
                 value={formData.registrationNumber}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="ABC-123"
@@ -328,7 +384,7 @@ export default function AddVehicle() {
               {errors.registrationNumber && <p className="text-red-500 text-xs mt-1">{errors.registrationNumber}</p>}
             </div>
 
-            {/* Make - from Ledger Store */}
+            {/* Make */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Make <span className="text-red-500">*</span>
@@ -337,18 +393,21 @@ export default function AddVehicle() {
                 name="make"
                 value={formData.make}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.make ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
                 <option value="">Select Make</option>
                 {activeMakes.map(m => (
-                  <option key={m.id} value={m.name}>
+                  <option key={m._id || m.id} value={m.name}>
                     {m.name}
                   </option>
                 ))}
               </select>
               {errors.make && <p className="text-red-500 text-xs mt-1">{errors.make}</p>}
+              {activeMakes.length === 0 && (
+                <p className="text-yellow-500 text-xs mt-1">No makes available. Please add makes in Ledger.</p>
+              )}
             </div>
 
             {/* Model */}
@@ -361,7 +420,7 @@ export default function AddVehicle() {
                 name="model"
                 value={formData.model}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.model ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Camry"
@@ -379,7 +438,7 @@ export default function AddVehicle() {
                 name="year"
                 value={formData.year}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.year ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="2023"
@@ -390,22 +449,19 @@ export default function AddVehicle() {
             {/* Color */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Color <span className="text-red-500">*</span>
+                Color
               </label>
               <input
                 type="text"
                 name="color"
                 value={formData.color}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.color ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
                 placeholder="White"
               />
-              {errors.color && <p className="text-red-500 text-xs mt-1">{errors.color}</p>}
             </div>
 
-            {/* Fuel Type - from Ledger Store */}
+            {/* Fuel Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fuel Type <span className="text-red-500">*</span>
@@ -414,21 +470,24 @@ export default function AddVehicle() {
                 name="fuelType"
                 value={formData.fuelType}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.fuelType ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
                 <option value="">Select Fuel Type</option>
                 {activeFuelTypes.map(fuel => (
-                  <option key={fuel.id} value={fuel.name}>
+                  <option key={fuel._id || fuel.id} value={fuel.name}>
                     {fuel.name}
                   </option>
                 ))}
               </select>
               {errors.fuelType && <p className="text-red-500 text-xs mt-1">{errors.fuelType}</p>}
+              {activeFuelTypes.length === 0 && (
+                <p className="text-yellow-500 text-xs mt-1">No fuel types available. Please add fuel types in Ledger.</p>
+              )}
             </div>
 
-            {/* Transmission - from Ledger Store */}
+            {/* Transmission */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Transmission
@@ -437,11 +496,11 @@ export default function AddVehicle() {
                 name="transmission"
                 value={formData.transmission}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               >
                 <option value="">Select Transmission</option>
                 {activeTransmissions.map(trans => (
-                  <option key={trans.id} value={trans.name}>
+                  <option key={trans._id || trans.id} value={trans.name}>
                     {trans.name}
                   </option>
                 ))}
@@ -458,12 +517,13 @@ export default function AddVehicle() {
                 name="seatingCapacity"
                 value={formData.seatingCapacity}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
                 placeholder="4"
+                min="1"
               />
             </div>
 
-            {/* Vehicle Category - from Ledger Store */}
+            {/* Vehicle Category */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Vehicle Category <span className="text-red-500">*</span>
@@ -472,35 +532,65 @@ export default function AddVehicle() {
                 name="vehicleCategory"
                 value={formData.vehicleCategory}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.vehicleCategory ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
                 <option value="">Select Category</option>
                 {activeVehicleCategories.map(cat => (
-                  <option key={cat.id} value={cat.name}>
+                  <option key={cat._id || cat.id} value={cat.name}>
                     {cat.name}
                   </option>
                 ))}
               </select>
               {errors.vehicleCategory && <p className="text-red-500 text-xs mt-1">{errors.vehicleCategory}</p>}
+              {activeVehicleCategories.length === 0 && (
+                <p className="text-yellow-500 text-xs mt-1">No categories available. Please add categories in Ledger.</p>
+              )}
             </div>
 
-          {/* Status - Simple Active/Inactive */}
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">
-    Status
-  </label>
-  <select
-    name="status"
-    value={formData.status}
-    onChange={handleChange}
-    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-  >
-    <option value="Active">Active</option>
-    <option value="Inactive">Inactive</option>
-  </select>
-</div>
+            {/* Meter Reading - NEW FIELD */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Meter Reading (km/miles) <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Gauge size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="number"
+                  name="meterReading"
+                  value={formData.meterReading}
+                  onChange={handleChange}
+                  className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                    errors.meterReading ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="0"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              {errors.meterReading && <p className="text-red-500 text-xs mt-1">{errors.meterReading}</p>}
+              <p className="text-xs text-gray-400 mt-1">Current odometer reading</p>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Status
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+              >
+                {statuses.map(status => (
+                  <option key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -509,6 +599,7 @@ export default function AddVehicle() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Registration & Documents</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Chassis Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Chassis Number <span className="text-red-500">*</span>
@@ -518,7 +609,7 @@ export default function AddVehicle() {
                 name="chassisNumber"
                 value={formData.chassisNumber}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.chassisNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="CH-123456789"
@@ -526,6 +617,7 @@ export default function AddVehicle() {
               {errors.chassisNumber && <p className="text-red-500 text-xs mt-1">{errors.chassisNumber}</p>}
             </div>
 
+            {/* Engine Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Engine Number <span className="text-red-500">*</span>
@@ -535,7 +627,7 @@ export default function AddVehicle() {
                 name="engineNumber"
                 value={formData.engineNumber}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
                   errors.engineNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="EN-123456789"
@@ -543,6 +635,7 @@ export default function AddVehicle() {
               {errors.engineNumber && <p className="text-red-500 text-xs mt-1">{errors.engineNumber}</p>}
             </div>
 
+            {/* Registration Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Registration Date
@@ -552,10 +645,11 @@ export default function AddVehicle() {
                 name="registrationDate"
                 value={formData.registrationDate}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               />
             </div>
 
+            {/* Insurance Expiry */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Insurance Expiry Date
@@ -565,10 +659,11 @@ export default function AddVehicle() {
                 name="insuranceExpiry"
                 value={formData.insuranceExpiry}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               />
             </div>
 
+            {/* Fitness Expiry */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fitness Certificate Expiry
@@ -578,10 +673,11 @@ export default function AddVehicle() {
                 name="fitnessExpiry"
                 value={formData.fitnessExpiry}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               />
             </div>
 
+            {/* Pollution Expiry */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Pollution Certificate Expiry
@@ -591,7 +687,7 @@ export default function AddVehicle() {
                 name="pollutionExpiry"
                 value={formData.pollutionExpiry}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               />
             </div>
           </div>
@@ -602,6 +698,7 @@ export default function AddVehicle() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Assignment & Purchase</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Assigned Driver */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Assigned Driver
@@ -610,17 +707,21 @@ export default function AddVehicle() {
                 name="assignedDriver"
                 value={formData.assignedDriver}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               >
                 <option value="">Select Driver</option>
                 {activeDrivers.map(driver => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.fullName} ({driver.employeeId})
+                  <option key={driver._id || driver.id} value={driver._id || driver.id}>
+                    {driver.name || driver.fullName} ({driver.employeeId})
                   </option>
                 ))}
               </select>
+              {activeDrivers.length === 0 && (
+                <p className="text-yellow-500 text-xs mt-1">No drivers available. Please add drivers first.</p>
+              )}
             </div>
 
+            {/* Purchase Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Purchase Date
@@ -630,21 +731,23 @@ export default function AddVehicle() {
                 name="purchaseDate"
                 value={formData.purchaseDate}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
               />
             </div>
 
+            {/* Purchase Price */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Purchase Price
               </label>
               <input
-                type="text"
+                type="number"
                 name="purchasePrice"
                 value={formData.purchasePrice}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="$ 25,000"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                placeholder="25000"
+                min="0"
               />
             </div>
           </div>
@@ -652,7 +755,10 @@ export default function AddVehicle() {
 
         {/* Documents Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Vehicle Documents</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <FileText size={20} className="text-blue-600" />
+            Vehicle Documents
+          </h2>
           
           <div className="mb-4">
             <label className="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition inline-flex items-center gap-2">
@@ -675,7 +781,7 @@ export default function AddVehicle() {
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-gray-700">Uploaded Documents:</h3>
               {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                   <div className="flex items-center gap-2">
                     <FileText size={16} className="text-blue-600" />
                     <div>
@@ -686,7 +792,7 @@ export default function AddVehicle() {
                   <button
                     type="button"
                     onClick={() => removeDocument(doc.id)}
-                    className="text-red-600 hover:text-red-700"
+                    className="text-red-600 hover:text-red-700 transition p-1 hover:bg-red-50 rounded"
                   >
                     <X size={16} />
                   </button>
@@ -707,10 +813,10 @@ export default function AddVehicle() {
           </button>
           <button
             type="submit"
-            disabled={isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition disabled:opacity-50"
+            disabled={isSubmitting}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Adding Vehicle...' : 'Add Vehicle'}
+            {isSubmitting ? 'Adding Vehicle...' : 'Add Vehicle'}
           </button>
         </div>
       </form>

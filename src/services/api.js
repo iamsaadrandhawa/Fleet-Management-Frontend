@@ -61,6 +61,12 @@ export const vehicleAPI = {
   create: (data) => api.post('/vehicles', data),
   update: (id, data) => api.put(`/vehicles/${id}`, data),
   delete: (id) => api.delete(`/vehicles/${id}`),
+  
+  // Add these new methods
+  assignToDriver: (id, data) => api.put(`/vehicles/${id}/assign`, data),
+  unassignFromDriver: (id) => api.put(`/vehicles/${id}/unassign`),
+  getByStatus: (status) => api.get(`/vehicles/status/${status}`),
+  getAvailable: () => api.get('/vehicles/available'),
 };
 
 // User APIs
