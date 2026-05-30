@@ -25,7 +25,7 @@ export default function Navbar() {
           <div className="flex items-center gap-4">
             {user && (
               <span className="hidden md:block text-sm text-gray-600">
-                Welcome, {user.name}
+                Welcome, {user.firstName}
               </span>
             )}
             <button

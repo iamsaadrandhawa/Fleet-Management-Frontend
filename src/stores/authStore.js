@@ -1,41 +1,8 @@
+// stores/authStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-// import { authAPI } from '../services/api'; // Commented for now
+import { authAPI } from '../services/api';
 import Logger from '../utils/logger';
-
-// Mock users for testing
-const MOCK_USERS = [
-  {
-    id: 1,
-    name: 'Super Admin',
-    email: 'super@fleet.com',
-    phone: '+92 300 1111111',
-    role: 'Super Admin',
-    department: 'Management',
-    location: 'Head Office',
-    permissions: ['create', 'read', 'update', 'delete', 'manage_users'],
-  },
-  {
-    id: 2,
-    name: 'Admin User',
-    email: 'admin@fleet.com',
-    phone: '+92 300 2222222',
-    role: 'Admin',
-    department: 'Management',
-    location: 'Head Office',
-    permissions: ['create', 'read', 'update', 'delete'],
-  },
-  {
-    id: 3,
-    name: 'Viewer User',
-    email: 'view@fleet.com',
-    phone: '+92 300 3333333',
-    role: 'Viewer',
-    department: 'Audit',
-    location: 'Head Office',
-    permissions: ['read'],
-  },
-];
 
 const useAuthStore = create(
   persist(
@@ -46,111 +13,165 @@ const useAuthStore = create(
       isLoading: false,
       error: null,
 
+      // Login with real API
       login: async (email, password, rememberMe = false) => {
         set({ isLoading: true, error: null });
         
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        const mockUser = MOCK_USERS.find(user => user.email === email);
-        
-        if (mockUser) {
-          let isValid = false;
-          if (email === 'super@fleet.com' && password === 'super123') isValid = true;
-          else if (email === 'admin@fleet.com' && password === 'admin123') isValid = true;
-          else if (email === 'view@fleet.com' && password === 'view123') isValid = true;
+        try {
+          // Call actual API
+          const response = await authAPI.login({ email, password });
           
-          if (isValid) {
-            const token = 'mock-jwt-token-' + Date.now();
-            
-            if (rememberMe) {
-              localStorage.setItem('token', token);
-            } else {
-              sessionStorage.setItem('token', token);
-            }
-            
-            set({
-              user: mockUser,
-              token: token,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null
-            });
-            
-            Logger.login(mockUser);
-            return { success: true };
+          console.log('Login API response:', response); // Debug log
+          
+          // Store token based on rememberMe preference
+          if (rememberMe) {
+            localStorage.setItem('token', response.token);
+          } else {
+            sessionStorage.setItem('token', response.token);
           }
+          
+          // ✅ Transform user data to match your actual API response
+          const user = {
+            id: response.user.id || response.user._id,
+            firstName: response.user.firstName,
+            lastName: response.user.lastName,
+            email: response.user.email,
+            phone: response.user.phone || '',
+            role: response.user.roleName,  // ✅ Use roleName from API
+            roleName: response.user.roleName,
+            department: response.user.department || '',
+            location: response.user.location || '',
+            employeeId: response.user.employeeId,
+            permissions: response.user.permissions || {}  // ✅ Store permissions object
+          };
+          
+          console.log('Stored user object:', user); // Debug log
+          
+          set({
+            user: user,
+            token: response.token,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null
+          });
+          
+          Logger.login(user);
+          return { success: true, user };
+          
+        } catch (error) {
+          console.error('Login error:', error);
+          set({
+            error: error.message || 'Invalid email or password',
+            isLoading: false
+          });
+          return { success: false, error: error.message };
         }
-        
-        set({
-          error: 'Invalid email or password',
-          isLoading: false
-        });
-        return { success: false, error: 'Invalid email or password' };
       },
 
+      // Logout with real API
       logout: async () => {
         const { user } = get();
         set({ isLoading: true });
         
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        if (user) Logger.logout(user);
-        localStorage.removeItem('token');
-        sessionStorage.removeItem('token');
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: null
-        });
+        try {
+          await authAPI.logout();
+        } catch (error) {
+          console.error('Logout API error:', error);
+        } finally {
+          if (user) Logger.logout(user);
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+          
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null
+          });
+        }
       },
 
-      // In authStore.js, add this method if not already present
-changePassword: async (currentPassword, newPassword) => {
-  set({ isLoading: true, error: null });
-  
-  try {
-    // Call API
-    await authAPI.changePassword({ currentPassword, newPassword });
-    
-    set({ isLoading: false });
-    
-    // Log the activity
-    const { user } = get();
-    Logger.log('UPDATE', 'AUTH', user?.id, { 
-      action: 'PASSWORD_CHANGED', 
-      email: user?.email,
-      name: user?.name
-    });
-    
-    return { success: true };
-  } catch (error) {
-    set({ 
-      error: error.message || 'Failed to change password', 
-      isLoading: false 
-    });
-    return { success: false, error: error.message };
-  }
-},
-
-      getProfile: async () => {
+      // Load user profile from API
+      loadUser: async () => {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        
+        if (!token) {
+          set({ isLoading: false, isAuthenticated: false });
+          return null;
+        }
+        
         set({ isLoading: true });
         
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const { user } = get();
-        set({ isLoading: false });
-        return user;
+        try {
+          const response = await authAPI.getProfile();
+          
+          const user = {
+            id: response.data.id || response.data._id,
+            firstName: response.data.firstName,
+            lastName: response.data.lastName,
+            email: response.data.email,
+            phone: response.data.phone || '',
+            role: response.data.roleName,
+            roleName: response.data.roleName,
+            department: response.data.department || '',
+            location: response.data.location || '',
+            employeeId: response.data.employeeId,
+            permissions: response.data.permissions || {}
+          };
+          
+          set({
+            user: user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null
+          });
+          
+          return user;
+        } catch (error) {
+          console.error('Failed to load user:', error);
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null
+          });
+          throw error;
+        }
       },
 
       clearError: () => set({ error: null }),
       
       updateUser: (userData) => set({ user: { ...get().user, ...userData } }),
+      
+      // Check if user has specific permission (using actual permissions object)
+      hasPermission: (action) => {
+        const { user } = get();
+        if (!user) return false;
+        // Check from permissions object returned from API
+        return user.permissions?.[action] === true;
+      },
+      
+      // Check if user has specific role
+      hasRole: (role) => {
+        const { user } = get();
+        if (!user) return false;
+        if (Array.isArray(role)) {
+          return role.includes(user.role);
+        }
+        return user.role === role;
+      }
     }),
     {
       name: 'auth-storage',
       getStorage: () => localStorage,
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated
+      })
     }
   )
 );

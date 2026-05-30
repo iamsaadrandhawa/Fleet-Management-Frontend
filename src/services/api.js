@@ -1,3 +1,4 @@
+// services/api.js
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -62,56 +63,86 @@ export const vehicleAPI = {
 
 // User APIs
 export const userAPI = {
-  getAll: () => api.get('/users'),
+  getAll: (params) => api.get('/users', { params }),
   getById: (id) => api.get(`/users/${id}`),
   create: (data) => api.post('/users', data),
   update: (id, data) => api.put(`/users/${id}`, data),
-  delete: (id) => api.delete(`/users/${id}`),
+   delete: (id) => {
+        console.log('Soft delete (deactivate) user:', id);
+        return api.delete(`/users/${id}`);
+    },
+    
+    // Hard delete (permanent removal)
+    hardDelete: (id) => {
+        console.log('Hard delete (permanent) user:', id);
+        return api.delete(`/users/${id}/hard`);
+    },    
+  getByEmail: (email) => api.get(`/users/email/${email}`),
+  getByRole: (role) => api.get(`/users/role/${role}`),
+  getStats: () => api.get('/users/stats'),
+  bulkUpdateStatus: (data) => api.patch('/users/bulk-status', data),
 };
 
-// Ledger APIs
+// Ledger APIs (Updated with Roles)
 export const ledgerAPI = {
+  // Get all ledgers grouped
+  getAll: () => api.get('/ledgers/all'),
+
+  // Get by type
+  getByType: (type) => api.get(`/ledgers/type/${type}`),
+
+  // ==================== ROLES ====================
+  getRoles: () => api.get('/ledgers/roles'),
+  addRole: (data) => api.post('/ledgers/roles', data),
+  updateRole: (id, data) => api.put(`/ledgers/roles/${id}`, data),
+  deleteRole: (id) => api.delete(`/ledgers/roles/${id}`),
+
+  // ==================== DESIGNATIONS ====================
   getDesignations: () => api.get('/ledgers/designations'),
-  getLocations: () => api.get('/ledgers/locations'),
-  getMakes: () => api.get('/ledgers/makes'),
-  getVehicleCategories: () => api.get('/ledgers/vehicle-categories'),
-  getFuelTypes: () => api.get('/ledgers/fuel-types'),
-  getTransmissions: () => api.get('/ledgers/transmissions'),
-  
-  // Create
   addDesignation: (data) => api.post('/ledgers/designations', data),
-  addLocation: (data) => api.post('/ledgers/locations', data),
-  addMake: (data) => api.post('/ledgers/makes', data),
-  addVehicleCategory: (data) => api.post('/ledgers/vehicle-categories', data),
-  addFuelType: (data) => api.post('/ledgers/fuel-types', data),
-  addTransmission: (data) => api.post('/ledgers/transmissions', data),
-  
-  // Update
   updateDesignation: (id, data) => api.put(`/ledgers/designations/${id}`, data),
-  updateLocation: (id, data) => api.put(`/ledgers/locations/${id}`, data),
-  updateMake: (id, data) => api.put(`/ledgers/makes/${id}`, data),
-  updateVehicleCategory: (id, data) => api.put(`/ledgers/vehicle-categories/${id}`, data),
-  updateFuelType: (id, data) => api.put(`/ledgers/fuel-types/${id}`, data),
-  updateTransmission: (id, data) => api.put(`/ledgers/transmissions/${id}`, data),
-  
-  // Delete
   deleteDesignation: (id) => api.delete(`/ledgers/designations/${id}`),
+
+  // ==================== LOCATIONS ====================
+  getLocations: () => api.get('/ledgers/locations'),
+  addLocation: (data) => api.post('/ledgers/locations', data),
+  updateLocation: (id, data) => api.put(`/ledgers/locations/${id}`, data),
   deleteLocation: (id) => api.delete(`/ledgers/locations/${id}`),
+
+  // ==================== MAKES ====================
+  getMakes: () => api.get('/ledgers/makes'),
+  addMake: (data) => api.post('/ledgers/makes', data),
+  updateMake: (id, data) => api.put(`/ledgers/makes/${id}`, data),
   deleteMake: (id) => api.delete(`/ledgers/makes/${id}`),
+
+  // ==================== VEHICLE CATEGORIES ====================
+  getVehicleCategories: () => api.get('/ledgers/vehicle-categories'),
+  addVehicleCategory: (data) => api.post('/ledgers/vehicle-categories', data),
+  updateVehicleCategory: (id, data) => api.put(`/ledgers/vehicle-categories/${id}`, data),
   deleteVehicleCategory: (id) => api.delete(`/ledgers/vehicle-categories/${id}`),
+
+  // ==================== FUEL TYPES ====================
+  getFuelTypes: () => api.get('/ledgers/fuel-types'),
+  addFuelType: (data) => api.post('/ledgers/fuel-types', data),
+  updateFuelType: (id, data) => api.put(`/ledgers/fuel-types/${id}`, data),
   deleteFuelType: (id) => api.delete(`/ledgers/fuel-types/${id}`),
+
+  // ==================== TRANSMISSIONS ====================
+  getTransmissions: () => api.get('/ledgers/transmissions'),
+  addTransmission: (data) => api.post('/ledgers/transmissions', data),
+  updateTransmission: (id, data) => api.put(`/ledgers/transmissions/${id}`, data),
   deleteTransmission: (id) => api.delete(`/ledgers/transmissions/${id}`),
 };
 
 // Log APIs
 export const logAPI = {
-  getAll: () => api.get('/logs'),
-  getRecent: (limit) => api.get(`/logs/recent?limit=${limit}`),
-  getByUser: (userId) => api.get(`/logs/user/${userId}`),
-  getByAction: (action) => api.get(`/logs/action/${action}`),
-  getByEntity: (entityType) => api.get(`/logs/entity/${entityType}`),
-  delete: (id) => api.delete(`/logs/${id}`),
-  clearAll: () => api.delete('/logs'),
+  getAll: () => api.get('/audit-logs'),
+  getRecent: (limit) => api.get(`/audit-logs/recent?limit=${limit}`),
+  getByUser: (userId) => api.get(`/audit-logs/user/${userId}`),
+  getByAction: (action) => api.get(`/audit-logs/action/${action}`),
+  getByEntity: (entityType) => api.get(`/audit-logs/entity/${entityType}`),
+  delete: (id) => api.delete(`/audit-logs/${id}`),
+  clearAll: () => api.delete('/audit-logs'),
 };
 
 export default api;

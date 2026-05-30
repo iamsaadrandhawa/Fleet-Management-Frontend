@@ -1,3 +1,4 @@
+// utils/Logger.js
 import useLogStore from '../stores/logStore';
 import useAuthStore from '../stores/authStore';
 
@@ -36,7 +37,7 @@ class Logger {
     
     const logEntry = {
       action, // 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'LOGIN', 'LOGOUT', etc.
-      entityType, // 'DRIVER', 'VEHICLE', 'USER', 'DESIGNATION', 'LOCATION', 'MAKE', 'FUEL_TYPE', 'TRANSMISSION', etc.
+      entityType, // 'DRIVER', 'VEHICLE', 'USER', 'ROLE', 'DESIGNATION', 'LOCATION', 'MAKE', 'FUEL_TYPE', 'TRANSMISSION', etc.
       entityId,
       details,
       userId: user?.id || null,
@@ -62,7 +63,7 @@ class Logger {
     return logEntry;
   }
   
-  // Auth related logs
+  // ==================== AUTH RELATED LOGS ====================
   static login(user) {
     this.log('LOGIN', 'AUTH', user.id, { email: user.email, name: user.name });
   }
@@ -71,7 +72,7 @@ class Logger {
     this.log('LOGOUT', 'AUTH', user?.id, { email: user?.email, name: user?.name });
   }
   
-  // Driver related logs
+  // ==================== DRIVER RELATED LOGS ====================
   static createDriver(driver) {
     this.log('CREATE', 'DRIVER', driver.id, { 
       name: driver.fullName, 
@@ -92,7 +93,7 @@ class Logger {
     this.log('VIEW', 'DRIVER', driverId, { name: driverName });
   }
   
-  // Vehicle related logs
+  // ==================== VEHICLE RELATED LOGS ====================
   static createVehicle(vehicle) {
     this.log('CREATE', 'VEHICLE', vehicle.id, { 
       make: vehicle.make, 
@@ -118,7 +119,7 @@ class Logger {
     this.log('VIEW', 'VEHICLE', vehicleId, { registrationNumber });
   }
   
-  // User related logs
+  // ==================== USER RELATED LOGS ====================
   static createUser(user) {
     this.log('CREATE', 'USER', user.id, { 
       name: user.name, 
@@ -138,9 +139,36 @@ class Logger {
     this.log('DELETE', 'USER', userId, { name: userName });
   }
   
-  // Ledger related logs - Designations
+  // ==================== ROLE RELATED LOGS ====================
+  static addRole(role) {
+    this.log('CREATE', 'ROLE', role.id || role._id, { 
+      name: role.name, 
+      code: role.code,
+      description: role.description,
+      permissions: role.permissions
+    });
+  }
+  
+  static updateRole(role) {
+    this.log('UPDATE', 'ROLE', role.id || role._id, { 
+      name: role.name, 
+      code: role.code,
+      description: role.description,
+      permissions: role.permissions
+    });
+  }
+  
+  static deleteRole(roleId, roleName) {
+    this.log('DELETE', 'ROLE', roleId, { name: roleName });
+  }
+  
+  static viewRole(roleId, roleName) {
+    this.log('VIEW', 'ROLE', roleId, { name: roleName });
+  }
+  
+  // ==================== LEDGER RELATED LOGS - DESIGNATIONS ====================
   static addDesignation(designation) {
-    this.log('CREATE', 'DESIGNATION', designation.id, { 
+    this.log('CREATE', 'DESIGNATION', designation.id || designation._id, { 
       name: designation.name, 
       code: designation.code,
       description: designation.description
@@ -148,7 +176,7 @@ class Logger {
   }
   
   static updateDesignation(designation) {
-    this.log('UPDATE', 'DESIGNATION', designation.id, { 
+    this.log('UPDATE', 'DESIGNATION', designation.id || designation._id, { 
       name: designation.name, 
       code: designation.code 
     });
@@ -158,16 +186,18 @@ class Logger {
     this.log('DELETE', 'DESIGNATION', designationId, { name: designationName });
   }
   
-  // Ledger related logs - Locations
+  // ==================== LEDGER RELATED LOGS - LOCATIONS ====================
   static addLocation(location) {
-    this.log('CREATE', 'LOCATION', location.id, { 
+    this.log('CREATE', 'LOCATION', location.id || location._id, { 
       name: location.name, 
-      code: location.code 
+      code: location.code,
+      address: location.address,
+      city: location.city
     });
   }
   
   static updateLocation(location) {
-    this.log('UPDATE', 'LOCATION', location.id, { 
+    this.log('UPDATE', 'LOCATION', location.id || location._id, { 
       name: location.name, 
       code: location.code 
     });
@@ -177,52 +207,66 @@ class Logger {
     this.log('DELETE', 'LOCATION', locationId, { name: locationName });
   }
   
-  // Ledger related logs - Makes
+  // ==================== LEDGER RELATED LOGS - MAKES ====================
   static addMake(make) {
-    this.log('CREATE', 'MAKE', make.id, { name: make.name, code: make.code });
+    this.log('CREATE', 'MAKE', make.id || make._id, { 
+      name: make.name, 
+      code: make.code,
+      country: make.country
+    });
   }
   
   static updateMake(make) {
-    this.log('UPDATE', 'MAKE', make.id, { name: make.name });
+    this.log('UPDATE', 'MAKE', make.id || make._id, { name: make.name });
   }
   
   static deleteMake(makeId, makeName) {
     this.log('DELETE', 'MAKE', makeId, { name: makeName });
   }
   
-  // Ledger related logs - Fuel Types
+  // ==================== LEDGER RELATED LOGS - FUEL TYPES ====================
   static addFuelType(fuelType) {
-    this.log('CREATE', 'FUEL_TYPE', fuelType.id, { name: fuelType.name, code: fuelType.code });
+    this.log('CREATE', 'FUEL_TYPE', fuelType.id || fuelType._id, { 
+      name: fuelType.name, 
+      code: fuelType.code 
+    });
   }
   
   static updateFuelType(fuelType) {
-    this.log('UPDATE', 'FUEL_TYPE', fuelType.id, { name: fuelType.name });
+    this.log('UPDATE', 'FUEL_TYPE', fuelType.id || fuelType._id, { name: fuelType.name });
   }
   
   static deleteFuelType(fuelTypeId, fuelTypeName) {
     this.log('DELETE', 'FUEL_TYPE', fuelTypeId, { name: fuelTypeName });
   }
   
-  // Ledger related logs - Transmissions
+  // ==================== LEDGER RELATED LOGS - TRANSMISSIONS ====================
   static addTransmission(transmission) {
-    this.log('CREATE', 'TRANSMISSION', transmission.id, { name: transmission.name, code: transmission.code });
+    this.log('CREATE', 'TRANSMISSION', transmission.id || transmission._id, { 
+      name: transmission.name, 
+      code: transmission.code 
+    });
   }
   
   static updateTransmission(transmission) {
-    this.log('UPDATE', 'TRANSMISSION', transmission.id, { name: transmission.name });
+    this.log('UPDATE', 'TRANSMISSION', transmission.id || transmission._id, { name: transmission.name });
   }
   
   static deleteTransmission(transmissionId, transmissionName) {
     this.log('DELETE', 'TRANSMISSION', transmissionId, { name: transmissionName });
   }
   
-  // Ledger related logs - Vehicle Categories
+  // ==================== LEDGER RELATED LOGS - VEHICLE CATEGORIES ====================
   static addVehicleCategory(category) {
-    this.log('CREATE', 'VEHICLE_CATEGORY', category.id, { name: category.name, code: category.code });
+    this.log('CREATE', 'VEHICLE_CATEGORY', category.id || category._id, { 
+      name: category.name, 
+      code: category.code,
+      description: category.description
+    });
   }
   
   static updateVehicleCategory(category) {
-    this.log('UPDATE', 'VEHICLE_CATEGORY', category.id, { name: category.name });
+    this.log('UPDATE', 'VEHICLE_CATEGORY', category.id || category._id, { name: category.name });
   }
   
   static deleteVehicleCategory(categoryId, categoryName) {

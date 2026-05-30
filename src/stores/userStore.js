@@ -1,146 +1,202 @@
+// stores/userStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import Logger from '../utils/logger';
+import { userAPI } from '../services/api';
 
 const useUserStore = create(
   persist(
     (set, get) => ({
-      users: [
-        {
-          id: 1,
-          userId: 'USR-001',
-          name: 'Super Admin',
-          email: 'superadmin@fleet.com',
-          phone: '+92 300 1111111',
-          role: 'Super Admin',
-          status: 'Active',
-          department: 'Management',
-          location: 'Head Office',
-          joiningDate: '2023-01-01',
-          lastLogin: 'Never',
-        },
-        {
-          id: 2,
-          userId: 'USR-002',
-          name: 'Admin User',
-          email: 'admin@fleet.com',
-          phone: '+92 300 2222222',
-          role: 'Admin',
-          status: 'Active',
-          department: 'Management',
-          location: 'Head Office',
-          joiningDate: '2023-03-15',
-          lastLogin: 'Never',
-        },
-        {
-          id: 3,
-          userId: 'USR-003',
-          name: 'Regular User',
-          email: 'user@fleet.com',
-          phone: '+92 300 3333333',
-          role: 'Staff',
-          status: 'Active',
-          department: 'Operations',
-          location: 'Karachi',
-          joiningDate: '2023-06-01',
-          lastLogin: 'Never',
-        },
-        {
-          id: 4,
-          userId: 'USR-004',
-          name: 'Viewer User',
-          email: 'viewer@fleet.com',
-          phone: '+92 300 4444444',
-          role: 'Viewer',
-          status: 'Active',
-          department: 'Operations',
-          location: 'Karachi',
-          joiningDate: '2023-06-01',
-          lastLogin: 'Never',
-        },
-      ],
+      users: [],
+      selectedUser: null,
       isLoading: false,
       error: null,
+      totalCount: 0,
 
-      fetchUsers: () => {
-        return get().users;
+      fetchUsers: async (params = {}) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await userAPI.getAll(params);
+          const usersData = response.data || response || [];
+          set({
+            users: usersData,
+            totalCount: usersData.length,
+            isLoading: false
+          });
+          return { success: true, data: usersData };
+        } catch (error) {
+          console.error('Fetch users error:', error);
+          set({
+            error: error.message || 'Failed to fetch users',
+            isLoading: false
+          });
+          return { success: false, error: error.message };
+        }
       },
 
       addUser: async (userData) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
-          const newUser = {
-            id: Date.now(),
-            userId: `USR-${String(get().users.length + 1).padStart(3, '0')}`,
-            ...userData,
-            joiningDate: new Date().toISOString().split('T')[0],
-            lastLogin: 'Never',
-            createdAt: new Date().toISOString(),
-          };
+          const response = await userAPI.create(userData);
+          const newUser = response.data;
+
           set(state => ({
-            users: [...state.users, newUser],
+            users: [newUser, ...state.users],
+            totalCount: state.totalCount + 1,
             isLoading: false
           }));
-          
-          // ✅ Log the activity
+
           Logger.createUser(newUser);
-          
           return { success: true, user: newUser };
         } catch (error) {
-          set({ error: error.message, isLoading: false });
+          set({
+            error: error.message || 'Failed to add user',
+            isLoading: false
+          });
           return { success: false, error: error.message };
         }
       },
 
       updateUser: async (id, userData) => {
-        set({ isLoading: true });
+        set({ isLoading: true, error: null });
         try {
-          // Get the user before update for logging
-          const oldUser = get().users.find(user => user.id === id);
-          
+          const response = await userAPI.update(id, userData);
+          const updatedUser = response.data;
+
           set(state => ({
             users: state.users.map(user =>
-              user.id === id ? { ...user, ...userData, updatedAt: new Date().toISOString() } : user
+              (user._id === id || user.id === id) ? updatedUser : user
             ),
             isLoading: false
           }));
-          
-          // ✅ Log the activity
-          const updatedUser = { ...oldUser, ...userData, id };
+
           Logger.updateUser(updatedUser);
-          
-          return { success: true };
+          return { success: true, user: updatedUser };
         } catch (error) {
-          set({ error: error.message, isLoading: false });
-          return { success: false };
+          set({
+            error: error.message || 'Failed to update user',
+            isLoading: false
+          });
+          return { success: false, error: error.message };
         }
       },
 
+      // ✅ HARD DELETE - Permanently remove from database
       deleteUser: async (id) => {
-        set({ isLoading: true });
+        console.log('🔴 HARD DELETE - Permanently removing user:', id);
+
+        if (!id) {
+          console.error('No ID provided');
+          return { success: false, error: 'User ID is required' };
+        }
+
+        set({ isLoading: true, error: null });
         try {
-          // Get user details before deletion for logging
-          const userToDelete = get().users.find(user => user.id === id);
-          
+          // ✅ Call the HARD DELETE endpoint
+          await userAPI.hardDelete(id);
+
+          // ✅ Remove from local state
           set(state => ({
-            users: state.users.filter(user => user.id !== id),
+            users: state.users.filter(user => user._id !== id && user.id !== id),
+            totalCount: state.totalCount - 1,
             isLoading: false
           }));
-          
-          // ✅ Log the activity
-          if (userToDelete) {
-            Logger.deleteUser(id, userToDelete.name);
-          }
-          
+
+          console.log('✅ User permanently deleted from database');
           return { success: true };
         } catch (error) {
-          set({ error: error.message, isLoading: false });
-          return { success: false };
+          console.error('Hard delete error:', error);
+          set({
+            error: error.message || 'Failed to delete user',
+            isLoading: false
+          });
+          return { success: false, error: error.message };
         }
       },
+
+     
+     // stores/userStore.js
+
+// Deactivate user (soft delete)
+deactivateUser: async (id) => {
+  console.log('🟡 Deactivating user:', id);
+  
+  if (!id) {
+    return { success: false, error: 'User ID is required' };
+  }
+  
+  set({ isLoading: true, error: null });
+  try {
+    // Call the soft delete endpoint
+    await userAPI.delete(id);
+    
+    set(state => ({
+      users: state.users.map(user =>
+        user._id === id || user.id === id 
+          ? { ...user, isActive: false, status: 'Inactive' }
+          : user
+      ),
+      isLoading: false
+    }));
+    
+    console.log('✅ User deactivated successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Deactivate error:', error);
+    set({ 
+      error: error.message || 'Failed to deactivate user', 
+      isLoading: false 
+    });
+    return { success: false, error: error.message };
+  }
+},
+
+// Activate user
+activateUser: async (id) => {
+  console.log('🟢 Activating user:', id);
+  
+  if (!id) {
+    return { success: false, error: 'User ID is required' };
+  }
+  
+  set({ isLoading: true, error: null });
+  try {
+    // Call update endpoint to set isActive to true
+    await userAPI.update(id, { isActive: true });
+    
+    set(state => ({
+      users: state.users.map(user =>
+        user._id === id || user.id === id 
+          ? { ...user, isActive: true, status: 'Active' }
+          : user
+      ),
+      isLoading: false
+    }));
+    
+    console.log('✅ User activated successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Activate error:', error);
+    set({ 
+      error: error.message || 'Failed to activate user', 
+      isLoading: false 
+    });
+    return { success: false, error: error.message };
+  }
+},
+      clearError: () => set({ error: null }),
+
+      reset: () => set({
+        users: [],
+        selectedUser: null,
+        isLoading: false,
+        error: null,
+        totalCount: 0
+      })
     }),
     {
       name: 'user-storage',
+      partialize: () => ({})
     }
   )
 );
