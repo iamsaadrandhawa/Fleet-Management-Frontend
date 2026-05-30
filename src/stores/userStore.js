@@ -114,76 +114,78 @@ const useUserStore = create(
         }
       },
 
-     
-     // stores/userStore.js
 
-// Deactivate user (soft delete)
-deactivateUser: async (id) => {
-  console.log('🟡 Deactivating user:', id);
-  
-  if (!id) {
-    return { success: false, error: 'User ID is required' };
-  }
-  
-  set({ isLoading: true, error: null });
-  try {
-    // Call the soft delete endpoint
-    await userAPI.delete(id);
-    
-    set(state => ({
-      users: state.users.map(user =>
-        user._id === id || user.id === id 
-          ? { ...user, isActive: false, status: 'Inactive' }
-          : user
-      ),
-      isLoading: false
-    }));
-    
-    console.log('✅ User deactivated successfully');
-    return { success: true };
-  } catch (error) {
-    console.error('Deactivate error:', error);
-    set({ 
-      error: error.message || 'Failed to deactivate user', 
-      isLoading: false 
-    });
-    return { success: false, error: error.message };
-  }
-},
+      // stores/userStore.js
 
-// Activate user
-activateUser: async (id) => {
-  console.log('🟢 Activating user:', id);
-  
-  if (!id) {
-    return { success: false, error: 'User ID is required' };
-  }
-  
-  set({ isLoading: true, error: null });
-  try {
-    // Call update endpoint to set isActive to true
-    await userAPI.update(id, { isActive: true });
-    
-    set(state => ({
-      users: state.users.map(user =>
-        user._id === id || user.id === id 
-          ? { ...user, isActive: true, status: 'Active' }
-          : user
-      ),
-      isLoading: false
-    }));
-    
-    console.log('✅ User activated successfully');
-    return { success: true };
-  } catch (error) {
-    console.error('Activate error:', error);
-    set({ 
-      error: error.message || 'Failed to activate user', 
-      isLoading: false 
-    });
-    return { success: false, error: error.message };
-  }
-},
+      // Deactivate user (soft delete)
+      deactivateUser: async (id) => {
+        console.log('🟡 Deactivating user:', id);
+
+        if (!id) {
+          return { success: false, error: 'User ID is required' };
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          // Call the soft delete endpoint
+          await userAPI.delete(id);
+
+          set(state => ({
+            users: state.users.map(user =>
+              user._id === id || user.id === id
+                ? { ...user, isActive: false, status: 'Inactive' }
+                : user
+            ),
+            isLoading: false
+          }));
+
+          console.log('✅ User deactivated successfully');
+          return { success: true };
+        } catch (error) {
+          console.error('Deactivate error:', error);
+          set({
+            error: error.message || 'Failed to deactivate user',
+            isLoading: false
+          });
+          return { success: false, error: error.message };
+        }
+      },
+
+      // Activate user
+      activateUser: async (id) => {
+        console.log('🟢 Activating user:', id);
+
+        if (!id) {
+          return { success: false, error: 'User ID is required' };
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          // Call update endpoint to set isActive to true
+          await userAPI.update(id, { isActive: true });
+
+          set(state => ({
+            users: state.users.map(user =>
+              user._id === id || user.id === id
+                ? { ...user, isActive: true, status: 'Active' }
+                : user
+            ),
+            isLoading: false
+          }));
+
+          console.log('✅ User activated successfully');
+          return { success: true };
+        } catch (error) {
+          console.error('Activate error:', error);
+          set({
+            error: error.message || 'Failed to activate user',
+            isLoading: false
+          });
+          return { success: false, error: error.message };
+        }
+      },
+
+      
       clearError: () => set({ error: null }),
 
       reset: () => set({
