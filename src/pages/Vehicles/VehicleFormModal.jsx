@@ -1,4 +1,4 @@
-// VehicleFormModal.jsx - Fixed input handling
+// VehicleFormModal.jsx - Fixed input handling with proper driver display
 import { X } from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
 
@@ -16,7 +16,16 @@ export default function VehicleFormModal({
   designations,
   locations,
 }) {
-  // Initialize form data - use useMemo to prevent unnecessary re-renders
+  // Helper function to get driver full name
+  const getDriverFullName = useCallback((driver) => {
+    if (!driver) return '';
+    const firstName = driver.firstName || '';
+    const lastName = driver.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    return fullName || driver.name || driver.fullName || 'Unknown Driver';
+  }, []);
+
+  // Initialize form data
   const initialFormData = useMemo(() => ({
     vehicleId: vehicle?.vehicleId || vehicle?._id || '',
     registrationNumber: vehicle?.registrationNumber || '',
@@ -29,6 +38,7 @@ export default function VehicleFormModal({
     seatingCapacity: vehicle?.seatingCapacity || '',
     chassisNumber: vehicle?.chassisNumber || '',
     engineNumber: vehicle?.engineNumber || '',
+    meterReading: vehicle?.meterReading || '',
     registrationDate: vehicle?.registrationDate
       ? vehicle.registrationDate.slice(0, 10)
       : '',
@@ -53,7 +63,7 @@ export default function VehicleFormModal({
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
 
-  // Handle input changes - use callback to prevent recreation
+  // Handle input changes
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -62,7 +72,7 @@ export default function VehicleFormModal({
     }
   }, [errors]);
 
-  // Get active items - memoized to prevent recalculation on every render
+  // Get active items - filter by status
   const getActiveItems = useCallback((items) => {
     if (!Array.isArray(items) || items.length === 0) return [];
     const hasStatusField = items.some(item => item.status !== undefined && item.status !== null);
@@ -74,12 +84,34 @@ export default function VehicleFormModal({
     });
   }, []);
 
-  // Pre-computed active lists with useMemo
+  // Get available drivers (only those not assigned to any vehicle, plus currently assigned)
+  const getAvailableDrivers = useCallback(() => {
+    if (!Array.isArray(drivers)) return [];
+    
+    const currentDriverId = vehicle?.assignedTo?._id || vehicle?.assignedDriver || formData.assignedDriver;
+    
+    return drivers.filter(driver => {
+      const status = driver.status?.toLowerCase();
+      const isAvailable = status === 'available' || status === 'active' || status === 'off duty';
+      
+      // If editing and this is the currently assigned driver, include them
+      if (isEditing && currentDriverId === (driver._id || driver.id)) {
+        return true;
+      }
+      
+      // Otherwise, only show drivers that are NOT assigned to any vehicle
+      const isNotAssigned = !driver.allocatedVehicle;
+      
+      return isAvailable && isNotAssigned;
+    });
+  }, [drivers, isEditing, vehicle, formData.assignedDriver]);
+
+  // Pre-computed active lists
   const activeMakes = useMemo(() => getActiveItems(makes), [makes, getActiveItems]);
   const activeFuelTypes = useMemo(() => getActiveItems(fuelTypes), [fuelTypes, getActiveItems]);
   const activeTransmissions = useMemo(() => getActiveItems(transmissions), [transmissions, getActiveItems]);
   const activeVehicleCategories = useMemo(() => getActiveItems(vehicleCategories), [vehicleCategories, getActiveItems]);
-  const activeDrivers = useMemo(() => getActiveItems(drivers), [drivers, getActiveItems]);
+  const availableDrivers = useMemo(() => getAvailableDrivers(), [getAvailableDrivers]);
 
   const statuses = useMemo(() => ['active', 'inactive', 'in maintenance', 'out of service'], []);
 
@@ -112,7 +144,7 @@ export default function VehicleFormModal({
     }
   }, [validateForm, onSubmit, formData]);
 
-  // Reusable field component as a separate component to prevent re-renders
+  // Reusable field component
   const Field = useCallback(({ label, required, error, children }) => (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -137,6 +169,23 @@ export default function VehicleFormModal({
       </p>
     ) : null,
   []);
+
+  // Get currently assigned driver display
+  const getCurrentDriverDisplay = useCallback(() => {
+    if (!isEditing) return null;
+    const currentDriverId = vehicle?.assignedTo?._id || vehicle?.assignedDriver;
+    if (!currentDriverId) return null;
+    
+    const currentDriver = drivers?.find(d => (d._id || d.id) === currentDriverId);
+    if (currentDriver) {
+      return (
+        <p className="text-xs text-blue-500 mt-1">
+          Currently assigned to: {getDriverFullName(currentDriver)} ({currentDriver.employeeId})
+        </p>
+      );
+    }
+    return null;
+  }, [isEditing, vehicle, drivers, getDriverFullName]);
 
   return (
     <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
@@ -294,6 +343,20 @@ export default function VehicleFormModal({
                   />
                 </Field>
 
+                {/* Meter Reading */}
+                <Field label="Meter Reading (km/miles)">
+                  <input
+                    type="number"
+                    name="meterReading"
+                    value={formData.meterReading}
+                    onChange={handleChange}
+                    placeholder="0"
+                    min="0"
+                    className={inputClass(false)}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Current odometer reading</p>
+                </Field>
+
                 {/* Vehicle Category */}
                 <Field label="Vehicle Category" required error={errors.vehicleCategory}>
                   <select
@@ -328,7 +391,7 @@ export default function VehicleFormModal({
                   </select>
                 </Field>
 
-                {/* Assigned Driver */}
+                {/* Assigned Driver - Only shows unassigned drivers */}
                 <Field label="Assigned Driver">
                   <select
                     name="assignedDriver"
@@ -336,15 +399,24 @@ export default function VehicleFormModal({
                     onChange={handleChange}
                     className={inputClass(false)}
                   >
-                    <option value="">Select Driver</option>
-                    {activeDrivers.map((d) => (
-                      <option key={d._id || d.id} value={d._id || d.id}>
-                        {d.name || d.fullName}
-                        {d.employeeId ? ` (${d.employeeId})` : ''}
-                      </option>
-                    ))}
+                    <option value="">-- Select Driver (Optional) --</option>
+                    {availableDrivers.map((d) => {
+                      const driverName = getDriverFullName(d);
+                      return (
+                        <option key={d._id || d.id} value={d._id || d.id}>
+                          {driverName} {d.employeeId ? `(${d.employeeId})` : ''}
+                          {d.allocatedVehicle ? ' (Currently has a vehicle)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
-                  {emptyHint(activeDrivers, 'drivers')}
+                  {getCurrentDriverDisplay()}
+                  {availableDrivers.length === 0 && drivers?.length > 0 && (
+                    <p className="text-amber-500 text-xs mt-1">
+                      No available drivers. All drivers are either assigned to a vehicle or not available.
+                    </p>
+                  )}
+                  {emptyHint(availableDrivers, 'available drivers')}
                 </Field>
               </div>
             </section>

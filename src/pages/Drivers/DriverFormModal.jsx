@@ -16,7 +16,7 @@ export default function DriverFormModal({
     lastName:         driver?.lastName || '',
     cnic:             driver?.cnic || '',
     phoneNumber:      driver?.phoneNumber || '',
-    department:       driver?.department || '',  // ADDED department field
+    department:       driver?.department || '',
     designation:      driver?.designation || '',
     location:         driver?.location || '',
     allocatedVehicle: driver?.allocatedVehicle?._id || driver?.allocatedVehicle || '',
@@ -35,13 +35,18 @@ export default function DriverFormModal({
   // Debug: Log vehicles prop
   useEffect(() => {
     console.log('Vehicles received in modal:', vehicles);
-    console.log('Available vehicles filter:', vehicles?.filter(v => v.status === 'active' || v.status === 'available'));
-  }, [vehicles]);
+    console.log('Currently assigned vehicle ID:', driver?.allocatedVehicle?._id || driver?.allocatedVehicle);
+  }, [vehicles, driver]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
+    
+    // If allocatedVehicle is cleared, also clear dateOfAllotment
+    if (name === 'allocatedVehicle' && !value) {
+      setFormData((prev) => ({ ...prev, dateOfAllotment: '' }));
+    }
   };
 
   const handleProfilePictureChange = (e) => {
@@ -127,20 +132,36 @@ export default function DriverFormModal({
     (l) => l.status?.toLowerCase() === 'active'
   ) || [];
   
-  // Get available vehicles - FIXED: Check for 'active' status
-  const availableVehicles = vehicles?.filter(
-    (v) => {
+  // Get available vehicles - FIXED: Only show unassigned vehicles + current assigned vehicle
+  const getAvailableVehicles = () => {
+    if (!vehicles) return [];
+    
+    const currentVehicleId = driver?.allocatedVehicle?._id || driver?.allocatedVehicle;
+    
+    return vehicles.filter((v) => {
       const status = v.status?.toLowerCase();
-      return status === 'active' || status === 'available';
-    }
-  ) || [];
+      const isActive = status === 'active' || status === 'available';
+      const vehicleId = v._id || v.id;
+      
+      // If editing and this is the currently assigned vehicle, include it
+      if (isEditing && currentVehicleId === vehicleId) {
+        return true;
+      }
+      
+      // Otherwise, only show vehicles that are NOT assigned to anyone
+      const isNotAssigned = !v.assignedTo;
+      
+      return isActive && isNotAssigned;
+    });
+  };
 
-  // Format vehicle display - FIXED to handle different property names
+  const availableVehicles = getAvailableVehicles();
+
+  // Format vehicle display
   const formatVehicleDisplay = (vehicle) => {
     const make = vehicle.make?.name || vehicle.make || '';
     const model = vehicle.model || '';
     const registration = vehicle.registrationNumber || vehicle.vehicleNumber || '';
-    const year = vehicle.year || '';
     
     if (make && model) {
       return `${make} ${model}${registration ? ` (${registration})` : ''}`;
@@ -234,7 +255,7 @@ export default function DriverFormModal({
                   {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
                 </div>
 
-                {/* Designation — value = name string (NOT _id) */}
+                {/* Designation */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Designation *</label>
                   <select name="designation" value={formData.designation} onChange={handleChange}
@@ -247,7 +268,7 @@ export default function DriverFormModal({
                   {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation}</p>}
                 </div>
 
-                {/* Location — value = name string (NOT _id) */}
+                {/* Location */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
                   <select name="location" value={formData.location} onChange={handleChange}
@@ -260,31 +281,38 @@ export default function DriverFormModal({
                   {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
                 </div>
 
-                {/* Allocated Vehicle — value = _id (IS a ref) */}
+                {/* Allocated Vehicle - WITH NULL OPTION */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Allocated Vehicle</label>
                   <select name="allocatedVehicle" value={formData.allocatedVehicle} onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white">
-                    <option value="">Select Vehicle</option>
+                    <option value="">-- None (Remove Vehicle) --</option>
                     {availableVehicles.map((v) => (
                       <option key={v._id || v.id} value={v._id || v.id}>
                         {formatVehicleDisplay(v)}
+                        {isEditing && (driver?.allocatedVehicle?._id === (v._id || v.id)) && " (Currently Assigned)"}
                       </option>
                     ))}
                   </select>
                   {availableVehicles.length === 0 && vehicles && vehicles.length > 0 && (
-                    <p className="text-xs text-yellow-500 mt-1">No active vehicles available. Only vehicles with status 'active' are shown.</p>
+                    <p className="text-xs text-yellow-500 mt-1">No available vehicles. All vehicles are already assigned to other drivers.</p>
                   )}
                   {(!vehicles || vehicles.length === 0) && (
                     <p className="text-xs text-yellow-500 mt-1">No vehicles found in system.</p>
+                  )}
+                  {isEditing && formData.allocatedVehicle && (
+                    <p className="text-xs text-blue-500 mt-1">
+                      Select "-- None (Remove Vehicle) --" to unassign the current vehicle
+                    </p>
                   )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date of Allotment</label>
                   <input type="date" name="dateOfAllotment" value={formData.dateOfAllotment} onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" />
-                  <p className="text-xs text-gray-400 mt-1">Date when vehicle was allocated</p>
+                    disabled={!formData.allocatedVehicle}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400" />
+                  <p className="text-xs text-gray-400 mt-1">Date when vehicle was allocated (required if vehicle is assigned)</p>
                 </div>
 
                 <div>

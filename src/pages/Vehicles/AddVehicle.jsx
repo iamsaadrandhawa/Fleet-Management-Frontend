@@ -18,7 +18,7 @@ export default function AddVehicle() {
     seatingCapacity: '',
     chassisNumber: '',
     engineNumber: '',
-    meterReading: '', // Added meterReading field
+    meterReading: '',
     registrationDate: '',
     insuranceExpiry: '',
     fitnessExpiry: '',
@@ -64,6 +64,12 @@ export default function AddVehicle() {
     loadData();
   }, []);
 
+  // Debug: Log drivers when loaded
+  useEffect(() => {
+    console.log('All drivers:', drivers);
+    console.log('Unassigned drivers:', activeDrivers);
+  }, [drivers]);
+
   // Get active options from stores with useMemo
   const activeMakes = useMemo(() => 
     makes?.filter(m => m.status === 'active' || m.status === 'Active') || [], 
@@ -85,10 +91,20 @@ export default function AddVehicle() {
     [vehicleCategories]
   );
   
-  const activeDrivers = useMemo(() => 
-    drivers?.filter(d => d.status === 'active' || d.status === 'Active') || [], 
-    [drivers]
-  );
+  // FIXED: Only show drivers that are:
+  // 1. Available (status = 'available')
+  // 2. NOT assigned to any vehicle (allocatedVehicle is null)
+  const activeDrivers = useMemo(() => {
+    if (!drivers) return [];
+    
+    return drivers.filter(driver => {
+      const status = driver.status?.toLowerCase();
+      const isAvailable = status === 'available' || status === 'active' || status === 'off duty';
+      const isNotAssigned = !driver.allocatedVehicle; // Check if driver has no vehicle assigned
+      
+      return isAvailable && isNotAssigned;
+    });
+  }, [drivers]);
 
   const statuses = useMemo(() => ['active', 'inactive', 'in maintenance', 'out of service'], []);
 
@@ -201,7 +217,6 @@ export default function AddVehicle() {
       newErrors.year = `Year must be between 1990 and ${currentYear + 1}`;
     }
     
-    // Validate meterReading is a positive number
     if (formData.meterReading && (formData.meterReading < 0 || isNaN(formData.meterReading))) {
       newErrors.meterReading = 'Meter reading must be a positive number';
     }
@@ -220,7 +235,6 @@ export default function AddVehicle() {
     
     setIsSubmitting(true);
     
-    // Generate vehicle ID if empty
     const vehicleId = formData.vehicleId || generateVehicleId();
     
     const vehicleData = {
@@ -228,7 +242,7 @@ export default function AddVehicle() {
       vehicleId,
       vehicleNumber: vehicleId,
       company: formData.make,
-      meterReading: parseFloat(formData.meterReading) || 0, // Ensure it's a number
+      meterReading: parseFloat(formData.meterReading) || 0,
       images: vehicleImages.map(img => img.name),
       documents: documents.map(doc => doc.name),
       createdAt: new Date().toISOString()
@@ -237,7 +251,6 @@ export default function AddVehicle() {
     const result = await addVehicle(vehicleData);
     
     if (result.success) {
-      // Log the activity
       logger.createVehicle({
         id: result.vehicle?.id || Date.now(),
         make: vehicleData.make,
@@ -250,7 +263,6 @@ export default function AddVehicle() {
       
       alert('Vehicle added successfully!');
       
-      // Reset form
       setFormData({
         vehicleId: '',
         registrationNumber: '',
@@ -284,6 +296,14 @@ export default function AddVehicle() {
     setIsSubmitting(false);
   }, [formData, validateForm, addVehicle, generateVehicleId, vehicleImages, documents]);
 
+  // Helper function to get driver full name
+  const getDriverFullName = (driver) => {
+    const firstName = driver.firstName || '';
+    const lastName = driver.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    return fullName || 'Unknown Driver';
+  };
+
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -311,7 +331,6 @@ export default function AddVehicle() {
             {errors.images && <p className="text-red-500 text-xs mt-1">{errors.images}</p>}
           </div>
 
-          {/* Image Previews */}
           {imagePreviews.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               {imagePreviews.map((preview, idx) => (
@@ -342,18 +361,15 @@ export default function AddVehicle() {
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Vehicle ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vehicle ID
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle ID</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   name="vehicleId"
                   value={formData.vehicleId}
                   onChange={handleChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                   placeholder="VH-001 (Auto-generated if empty)"
                 />
                 <button
@@ -366,17 +382,14 @@ export default function AddVehicle() {
               </div>
             </div>
 
-            {/* Registration Number */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Registration Number <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Registration Number <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 name="registrationNumber"
                 value={formData.registrationNumber}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="ABC-123"
@@ -384,43 +397,32 @@ export default function AddVehicle() {
               {errors.registrationNumber && <p className="text-red-500 text-xs mt-1">{errors.registrationNumber}</p>}
             </div>
 
-            {/* Make */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Make <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Make <span className="text-red-500">*</span></label>
               <select
                 name="make"
                 value={formData.make}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.make ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
                 <option value="">Select Make</option>
                 {activeMakes.map(m => (
-                  <option key={m._id || m.id} value={m.name}>
-                    {m.name}
-                  </option>
+                  <option key={m._id || m.id} value={m.name}>{m.name}</option>
                 ))}
               </select>
               {errors.make && <p className="text-red-500 text-xs mt-1">{errors.make}</p>}
-              {activeMakes.length === 0 && (
-                <p className="text-yellow-500 text-xs mt-1">No makes available. Please add makes in Ledger.</p>
-              )}
             </div>
 
-            {/* Model */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Model <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Model <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 name="model"
                 value={formData.model}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.model ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Camry"
@@ -428,17 +430,14 @@ export default function AddVehicle() {
               {errors.model && <p className="text-red-500 text-xs mt-1">{errors.model}</p>}
             </div>
 
-            {/* Year */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Year <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Year <span className="text-red-500">*</span></label>
               <input
                 type="number"
                 name="year"
                 value={formData.year}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.year ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="2023"
@@ -446,114 +445,84 @@ export default function AddVehicle() {
               {errors.year && <p className="text-red-500 text-xs mt-1">{errors.year}</p>}
             </div>
 
-            {/* Color */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Color
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
               <input
                 type="text"
                 name="color"
                 value={formData.color}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                 placeholder="White"
               />
             </div>
 
-            {/* Fuel Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fuel Type <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Type <span className="text-red-500">*</span></label>
               <select
                 name="fuelType"
                 value={formData.fuelType}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.fuelType ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
                 <option value="">Select Fuel Type</option>
                 {activeFuelTypes.map(fuel => (
-                  <option key={fuel._id || fuel.id} value={fuel.name}>
-                    {fuel.name}
-                  </option>
+                  <option key={fuel._id || fuel.id} value={fuel.name}>{fuel.name}</option>
                 ))}
               </select>
               {errors.fuelType && <p className="text-red-500 text-xs mt-1">{errors.fuelType}</p>}
-              {activeFuelTypes.length === 0 && (
-                <p className="text-yellow-500 text-xs mt-1">No fuel types available. Please add fuel types in Ledger.</p>
-              )}
             </div>
 
-            {/* Transmission */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Transmission
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Transmission</label>
               <select
                 name="transmission"
                 value={formData.transmission}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               >
                 <option value="">Select Transmission</option>
                 {activeTransmissions.map(trans => (
-                  <option key={trans._id || trans.id} value={trans.name}>
-                    {trans.name}
-                  </option>
+                  <option key={trans._id || trans.id} value={trans.name}>{trans.name}</option>
                 ))}
               </select>
             </div>
 
-            {/* Seating Capacity */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Seating Capacity
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Seating Capacity</label>
               <input
                 type="number"
                 name="seatingCapacity"
                 value={formData.seatingCapacity}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                 placeholder="4"
                 min="1"
               />
             </div>
 
-            {/* Vehicle Category */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vehicle Category <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Category <span className="text-red-500">*</span></label>
               <select
                 name="vehicleCategory"
                 value={formData.vehicleCategory}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.vehicleCategory ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
                 <option value="">Select Category</option>
                 {activeVehicleCategories.map(cat => (
-                  <option key={cat._id || cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
+                  <option key={cat._id || cat.id} value={cat.name}>{cat.name}</option>
                 ))}
               </select>
               {errors.vehicleCategory && <p className="text-red-500 text-xs mt-1">{errors.vehicleCategory}</p>}
-              {activeVehicleCategories.length === 0 && (
-                <p className="text-yellow-500 text-xs mt-1">No categories available. Please add categories in Ledger.</p>
-              )}
             </div>
 
-            {/* Meter Reading - NEW FIELD */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Meter Reading (km/miles) <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Meter Reading (km/miles) <span className="text-red-500">*</span></label>
               <div className="relative">
                 <Gauge size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
@@ -561,7 +530,7 @@ export default function AddVehicle() {
                   name="meterReading"
                   value={formData.meterReading}
                   onChange={handleChange}
-                  className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                  className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                     errors.meterReading ? 'border-red-500' : 'border-gray-300'
                   }`}
                   placeholder="0"
@@ -570,19 +539,15 @@ export default function AddVehicle() {
                 />
               </div>
               {errors.meterReading && <p className="text-red-500 text-xs mt-1">{errors.meterReading}</p>}
-              <p className="text-xs text-gray-400 mt-1">Current odometer reading</p>
             </div>
 
-            {/* Status */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               >
                 {statuses.map(status => (
                   <option key={status} value={status}>
@@ -599,17 +564,14 @@ export default function AddVehicle() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Registration & Documents</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Chassis Number */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Chassis Number <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Chassis Number <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 name="chassisNumber"
                 value={formData.chassisNumber}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.chassisNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="CH-123456789"
@@ -617,17 +579,14 @@ export default function AddVehicle() {
               {errors.chassisNumber && <p className="text-red-500 text-xs mt-1">{errors.chassisNumber}</p>}
             </div>
 
-            {/* Engine Number */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Engine Number <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Engine Number <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 name="engineNumber"
                 value={formData.engineNumber}
                 onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100 ${
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.engineNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="EN-123456789"
@@ -635,59 +594,47 @@ export default function AddVehicle() {
               {errors.engineNumber && <p className="text-red-500 text-xs mt-1">{errors.engineNumber}</p>}
             </div>
 
-            {/* Registration Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Registration Date
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Registration Date</label>
               <input
                 type="date"
                 name="registrationDate"
                 value={formData.registrationDate}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
 
-            {/* Insurance Expiry */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Insurance Expiry Date
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiry Date</label>
               <input
                 type="date"
                 name="insuranceExpiry"
                 value={formData.insuranceExpiry}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
 
-            {/* Fitness Expiry */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fitness Certificate Expiry
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fitness Certificate Expiry</label>
               <input
                 type="date"
                 name="fitnessExpiry"
                 value={formData.fitnessExpiry}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
 
-            {/* Pollution Expiry */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pollution Certificate Expiry
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pollution Certificate Expiry</label>
               <input
                 type="date"
                 name="pollutionExpiry"
                 value={formData.pollutionExpiry}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -698,7 +645,7 @@ export default function AddVehicle() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Assignment & Purchase</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Assigned Driver */}
+            {/* Assigned Driver - ONLY SHOW UNASSIGNED DRIVERS */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Assigned Driver
@@ -707,17 +654,40 @@ export default function AddVehicle() {
                 name="assignedDriver"
                 value={formData.assignedDriver}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               >
                 <option value="">Select Driver</option>
-                {activeDrivers.map(driver => (
-                  <option key={driver._id || driver.id} value={driver._id || driver.id}>
-                    {driver.name || driver.fullName} ({driver.employeeId})
-                  </option>
-                ))}
+                {activeDrivers.map(driver => {
+                  const driverName = getDriverFullName(driver);
+                  return (
+                    <option key={driver._id || driver.id} value={driver._id || driver.id}>
+                      {driverName} {driver.employeeId ? `(${driver.employeeId})` : ''}
+                    </option>
+                  );
+                })}
               </select>
               {activeDrivers.length === 0 && (
-                <p className="text-yellow-500 text-xs mt-1">No drivers available. Please add drivers first.</p>
+                <div className="mt-2">
+                  <p className="text-yellow-500 text-xs">
+                    No drivers available. All drivers are either:
+                  </p>
+                  <ul className="text-xs text-gray-500 mt-1 list-disc list-inside">
+                    <li>Already assigned to a vehicle</li>
+                    <li>Not available (on trip/off duty/suspended)</li>
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => window.location.href = '/drivers/add'}
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    + Add New Driver
+                  </button>
+                </div>
+              )}
+              {activeDrivers.length > 0 && (
+                <p className="text-xs text-green-500 mt-1">
+                  Showing {activeDrivers.length} driver(s) without any vehicle assigned
+                </p>
               )}
             </div>
 
@@ -731,7 +701,7 @@ export default function AddVehicle() {
                 name="purchaseDate"
                 value={formData.purchaseDate}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               />
             </div>
 
@@ -745,7 +715,7 @@ export default function AddVehicle() {
                 name="purchasePrice"
                 value={formData.purchasePrice}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                 placeholder="25000"
                 min="0"
               />
@@ -776,7 +746,6 @@ export default function AddVehicle() {
             {errors.documents && <p className="text-red-500 text-xs mt-1">{errors.documents}</p>}
           </div>
 
-          {/* Document List */}
           {documents.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-gray-700">Uploaded Documents:</h3>
