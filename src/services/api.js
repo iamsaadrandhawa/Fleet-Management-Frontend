@@ -47,11 +47,13 @@ export const authAPI = {
 
 // Driver APIs
 export const driverAPI = {
-  getAll: () => api.get('/drivers'),
+  getAll: (params) => api.get('/drivers', { params }), // Add params support
   getById: (id) => api.get(`/drivers/${id}`),
   create: (data) => api.post('/drivers', data),
   update: (id, data) => api.put(`/drivers/${id}`, data),
   delete: (id) => api.delete(`/drivers/${id}`),
+  updateStatus: (id, status) => api.patch(`/drivers/${id}/status`, { status }),
+  getByStatus: (status) => api.get(`/drivers/status/${status}`),
 };
 
 // Vehicle APIs

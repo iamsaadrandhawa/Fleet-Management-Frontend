@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Upload, X, FileText, Image as ImageIcon, User, Car } from 'lucide-react';
 import useDriverStore from '../../stores/driverStore';
 import useLedgerStore from '../../stores/ledgerStore';
 import useVehicleStore from '../../stores/vehicleStore';
@@ -12,54 +12,99 @@ export default function AddDriver() {
     lastName: '',
     cnic: '',
     phoneNumber: '',
+    department: '',
     designation: '',
     location: '',
     allocatedVehicle: '',
     dateOfAllotment: '',
+    licenseNumber: '',
+    licenseExpiry: '',
+    joiningDate: '',
   });
 
   const [profilePicture, setProfilePicture] = useState(null);
   const [profilePreview, setProfilePreview] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get data from stores
-  const { addDriver, isLoading } = useDriverStore();
-  const { designations, fetchDesignations, locations, fetchLocations } = useLedgerStore();
-  const { vehicles, fetchVehicles } = useVehicleStore();
+  const { addDriver } = useDriverStore();
+  const { 
+    designations, 
+    fetchDesignations, 
+    locations, 
+    fetchLocations,
+    isLoading: ledgerLoading 
+  } = useLedgerStore();
+  const { 
+    vehicles, 
+    fetchVehicles,
+    isLoading: vehiclesLoading 
+  } = useVehicleStore();
 
   // Fetch data on component mount
   useEffect(() => {
-    // Fetch all required data
-    if (fetchDesignations) fetchDesignations();
-    if (fetchLocations) fetchLocations();
-    if (fetchVehicles) fetchVehicles();
+    const loadData = async () => {
+      await Promise.all([
+        fetchDesignations(),
+        fetchLocations(),
+        fetchVehicles()
+      ]);
+    };
+    loadData();
   }, []);
 
   // Get active options from stores
-  const activeDesignations = designations?.filter(d => d.status === 'Active') || [];
-  const activeLocations = locations?.filter(l => l.status === 'Active') || [];
-  const activeVehicles = vehicles?.filter(v => v.status === 'Active') || [];
+  const activeDesignations = useMemo(() => 
+    designations?.filter(d => d.status === 'Active' || d.status === 'active') || [], 
+    [designations]
+  );
+  
+  const activeLocations = useMemo(() => 
+    locations?.filter(l => l.status === 'Active' || l.status === 'active') || [], 
+    [locations]
+  );
+  
+  // Get available vehicles (active and not assigned)
+  const availableVehicles = useMemo(() => 
+    vehicles?.filter(v => v.status === 'active') || [], 
+    [vehicles]
+  );
+
+  // Format vehicle display
+  const formatVehicleDisplay = useCallback((vehicle) => {
+    const make = vehicle.make?.name || vehicle.make || '';
+    const model = vehicle.model || '';
+    const registration = vehicle.registrationNumber || vehicle.vehicleNumber || '';
+    return `${make} ${model} (${registration})`;
+  }, []);
+
+  // Generate employee ID
+  const generateEmployeeId = useCallback(() => {
+    const randomNum = Math.floor(Math.random() * 1000);
+    return `EMP-${String(randomNum).padStart(3, '0')}`;
+  }, []);
 
   // Handle text input changes
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors({ ...errors, [name]: '' });
+      setErrors(prev => ({ ...prev, [name]: '' }));
     }
-  };
+  }, [errors]);
 
   // Handle profile picture upload
-  const handleProfilePicture = (e) => {
+  const handleProfilePicture = useCallback((e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        setErrors({ ...errors, profile: 'Profile picture must be less than 2MB' });
+        setErrors(prev => ({ ...prev, profile: 'Profile picture must be less than 2MB' }));
         return;
       }
       if (!file.type.startsWith('image/')) {
-        setErrors({ ...errors, profile: 'Please upload an image file' });
+        setErrors(prev => ({ ...prev, profile: 'Please upload an image file' }));
         return;
       }
       setProfilePicture(file);
@@ -69,10 +114,10 @@ export default function AddDriver() {
       };
       reader.readAsDataURL(file);
     }
-  };
+  }, []);
 
   // Handle document upload
-  const handleDocumentUpload = (e) => {
+  const handleDocumentUpload = useCallback((e) => {
     const files = Array.from(e.target.files);
     const validFiles = [];
     const invalidFiles = [];
@@ -93,35 +138,36 @@ export default function AddDriver() {
     });
 
     if (invalidFiles.length > 0) {
-      setErrors({ ...errors, documents: `Invalid files: ${invalidFiles.join(', ')}` });
+      setErrors(prev => ({ ...prev, documents: `Invalid files: ${invalidFiles.join(', ')}` }));
     }
 
-    setDocuments([...documents, ...validFiles]);
-  };
+    setDocuments(prev => [...prev, ...validFiles]);
+  }, []);
 
   // Remove document
-  const removeDocument = (id) => {
-    setDocuments(documents.filter(doc => doc.id !== id));
-  };
+  const removeDocument = useCallback((id) => {
+    setDocuments(prev => prev.filter(doc => doc.id !== id));
+  }, []);
 
   // Remove profile picture
-  const removeProfilePicture = () => {
+  const removeProfilePicture = useCallback(() => {
     setProfilePicture(null);
     setProfilePreview(null);
-  };
+  }, []);
 
-  
   // Validate form
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const newErrors = {};
     
-    if (!formData.employeeId) newErrors.employeeId = 'Employee ID is required';
     if (!formData.firstName) newErrors.firstName = 'First name is required';
     if (!formData.lastName) newErrors.lastName = 'Last name is required';
     if (!formData.cnic) newErrors.cnic = 'CNIC is required';
     if (!formData.phoneNumber) newErrors.phoneNumber = 'Phone number is required';
+    if (!formData.department) newErrors.department = 'Department is required';
     if (!formData.designation) newErrors.designation = 'Designation is required';
     if (!formData.location) newErrors.location = 'Location is required';
+    if (!formData.licenseNumber) newErrors.licenseNumber = 'License number is required';
+    if (!formData.licenseExpiry) newErrors.licenseExpiry = 'License expiry date is required';
     
     // CNIC validation (XXXXX-XXXXXXX-X)
     const cnicPattern = /^\d{5}-\d{7}-\d$/;
@@ -135,39 +181,90 @@ export default function AddDriver() {
       newErrors.phoneNumber = 'Please enter a valid phone number';
     }
     
+    // Date validation
+    if (formData.licenseExpiry && new Date(formData.licenseExpiry) < new Date()) {
+      newErrors.licenseExpiry = 'License expiry date must be in the future';
+    }
+    
+    // If allocated vehicle is selected, date of allotment is required
+    if (formData.allocatedVehicle && !formData.dateOfAllotment) {
+      newErrors.dateOfAllotment = 'Date of allotment is required when allocating a vehicle';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (validateForm()) {
-    // Generate employee ID if empty
-    if (!formData.employeeId) {
-      const generateEmployeeId = () => {
-        const randomNum = Math.floor(Math.random() * 1000);
-        return `EMP-${String(randomNum).padStart(3, '0')}`;
-      };
-      formData.employeeId = generateEmployeeId();
-    }
+  }, [formData]);
 
-    const driverData = {
-      ...formData,
-      profilePicture: profilePicture ? profilePicture.name : null,
-      documents: documents.map(doc => doc.name),
-      fullName: `${formData.firstName} ${formData.lastName}`,
-      status: 'Active',
-      createdAt: new Date().toISOString()
-    };
+  // Handle submit
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
     
-    const result = await addDriver(driverData);
+    if (!validateForm()) {
+      console.log("Validation failed:", errors);
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    // Generate employee ID if empty
+    const employeeId = formData.employeeId || generateEmployeeId();
+    
+    // Create FormData for file uploads
+    const submitData = new FormData();
+    
+    // Get the actual names from IDs for designation and location
+    const selectedDesignation = activeDesignations.find(d => d._id === formData.designation || d.id === formData.designation);
+    const selectedLocation = activeLocations.find(l => l._id === formData.location || l.id === formData.location);
+    
+    // Add all text fields - send NAME values for designation and location
+    submitData.append('employeeId', employeeId);
+    submitData.append('firstName', formData.firstName);
+    submitData.append('lastName', formData.lastName);
+    submitData.append('cnic', formData.cnic);
+    submitData.append('phoneNumber', formData.phoneNumber);
+    submitData.append('department', formData.department);
+    submitData.append('designation', selectedDesignation?.name || formData.designation);
+    submitData.append('location', selectedLocation?.name || formData.location);
+    submitData.append('licenseNumber', formData.licenseNumber);
+    submitData.append('licenseExpiry', formData.licenseExpiry);
+    
+    // Add joiningDate (if not provided, backend will use default)
+    if (formData.joiningDate) {
+      submitData.append('joiningDate', formData.joiningDate);
+    }
+    
+    // Add allocatedVehicle (ObjectId) and dateOfAllotment
+    if (formData.allocatedVehicle) {
+      submitData.append('allocatedVehicle', formData.allocatedVehicle);
+    }
+    if (formData.dateOfAllotment) {
+      submitData.append('dateOfAllotment', formData.dateOfAllotment);
+    }
+    
+    // Add profile picture
+    if (profilePicture) {
+      submitData.append('profilePicture', profilePicture);
+    }
+    
+    // Add documents
+    documents.forEach((doc) => {
+      submitData.append('documents', doc.file);
+    });
+    
+    // Log all data being sent
+    console.log('=== Submitting Driver Data ===');
+    for (let pair of submitData.entries()) {
+      console.log(pair[0] + ': ' + pair[1]);
+    }
+    
+    const result = await addDriver(submitData);
     
     if (result.success) {
-      // Log the activity
       Logger.createDriver({
-        id: result.driver?.id,
-        fullName: driverData.fullName,
-        employeeId: driverData.employeeId,
-        phoneNumber: driverData.phoneNumber
+        id: result.driver?._id,
+        name: `${formData.firstName} ${formData.lastName}`,
+        employeeId: employeeId,
+        phoneNumber: formData.phoneNumber
       });
       
       alert('Driver added successfully!');
@@ -179,10 +276,14 @@ const handleSubmit = async (e) => {
         lastName: '',
         cnic: '',
         phoneNumber: '',
+        department: '',
         designation: '',
         location: '',
         allocatedVehicle: '',
         dateOfAllotment: '',
+        licenseNumber: '',
+        licenseExpiry: '',
+        joiningDate: '',
       });
       setProfilePicture(null);
       setProfilePreview(null);
@@ -190,16 +291,20 @@ const handleSubmit = async (e) => {
     } else {
       alert('Error adding driver: ' + (result.error || 'Unknown error'));
     }
-  }
-};
+    
+    setIsSubmitting(false);
+  }, [formData, validateForm, addDriver, generateEmployeeId, profilePicture, documents, activeDesignations, activeLocations]);
+
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Profile Picture Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Profile Picture</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <Upload size={20} className="text-blue-600" />
+            Profile Picture
+          </h2>
           
           <div className="flex items-center space-x-6">
             {profilePreview ? (
@@ -212,7 +317,7 @@ const handleSubmit = async (e) => {
                 <button
                   type="button"
                   onClick={removeProfilePicture}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
                 >
                   <X size={14} />
                 </button>
@@ -242,13 +347,16 @@ const handleSubmit = async (e) => {
 
         {/* Basic Information Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Basic Information</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <User size={20} className="text-blue-600" />
+            Basic Information
+          </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Employee ID */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Employee ID <span className="text-red-500">*</span>
+                Employee ID
               </label>
               <div className="flex gap-2">
                 <input
@@ -256,14 +364,17 @@ const handleSubmit = async (e) => {
                   name="employeeId"
                   value={formData.employeeId}
                   onChange={handleChange}
-                  className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.employeeId ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="EMP-001"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  placeholder="EMP-001 (Auto-generated if empty)"
                 />
-               
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, employeeId: generateEmployeeId() }))}
+                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
+                >
+                  Generate
+                </button>
               </div>
-              {errors.employeeId && <p className="text-red-500 text-xs mt-1">{errors.employeeId}</p>}
             </div>
 
             {/* First Name */}
@@ -338,7 +449,25 @@ const handleSubmit = async (e) => {
               {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>}
             </div>
 
-            {/* Designation - from Ledger Store */}
+            {/* Department */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Department <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                  errors.department ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Transport / Logistics / Fleet"
+              />
+              {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
+            </div>
+
+            {/* Designation */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Designation <span className="text-red-500">*</span>
@@ -353,7 +482,7 @@ const handleSubmit = async (e) => {
               >
                 <option value="">Select Designation</option>
                 {activeDesignations.map(des => (
-                  <option key={des.id} value={des.name}>
+                  <option key={des._id || des.id} value={des._id || des.id}>
                     {des.name}
                   </option>
                 ))}
@@ -361,7 +490,7 @@ const handleSubmit = async (e) => {
               {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation}</p>}
             </div>
 
-            {/* Location - from Ledger Store */}
+            {/* Location */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Location <span className="text-red-500">*</span>
@@ -376,7 +505,7 @@ const handleSubmit = async (e) => {
               >
                 <option value="">Select Location</option>
                 {activeLocations.map(loc => (
-                  <option key={loc.id} value={loc.name}>
+                  <option key={loc._id || loc.id} value={loc._id || loc.id}>
                     {loc.name}
                   </option>
                 ))}
@@ -384,7 +513,74 @@ const handleSubmit = async (e) => {
               {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
             </div>
 
-            {/* Allocated Vehicle - from Vehicle Store */}
+            {/* Joining Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Joining Date
+              </label>
+              <input
+                type="date"
+                name="joiningDate"
+                value={formData.joiningDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Leave empty to use current date</p>
+            </div>
+          </div>
+        </div>
+
+        {/* License Information Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">License Information</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* License Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                License Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="licenseNumber"
+                value={formData.licenseNumber}
+                onChange={handleChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                  errors.licenseNumber ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="DL-12345"
+              />
+              {errors.licenseNumber && <p className="text-red-500 text-xs mt-1">{errors.licenseNumber}</p>}
+            </div>
+
+            {/* License Expiry */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                License Expiry <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="licenseExpiry"
+                value={formData.licenseExpiry}
+                onChange={handleChange}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                  errors.licenseExpiry ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
+              {errors.licenseExpiry && <p className="text-red-500 text-xs mt-1">{errors.licenseExpiry}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Vehicle Allocation Section */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <Car size={20} className="text-blue-600" />
+            Vehicle Allocation (Optional)
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Allocated Vehicle */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Allocated Vehicle
@@ -395,13 +591,14 @@ const handleSubmit = async (e) => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
               >
-                <option value="">Select Vehicle</option>
-                {activeVehicles.map(vehicle => (
-                  <option key={vehicle.id} value={`${vehicle.make} ${vehicle.model} (${vehicle.registrationNumber})`}>
-                    {vehicle.make} {vehicle.model} - {vehicle.registrationNumber}
+                <option value="">Select Vehicle (Optional)</option>
+                {availableVehicles.map(vehicle => (
+                  <option key={vehicle._id || vehicle.id} value={vehicle._id || vehicle.id}>
+                    {formatVehicleDisplay(vehicle)}
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-gray-500 mt-1">You can allocate a vehicle later</p>
             </div>
 
             {/* Date of Allotment */}
@@ -414,16 +611,23 @@ const handleSubmit = async (e) => {
                 name="dateOfAllotment"
                 value={formData.dateOfAllotment}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
+                  errors.dateOfAllotment ? 'border-red-500' : 'border-gray-300'
+                }`}
+                disabled={!formData.allocatedVehicle}
               />
-              <p className="text-xs text-gray-500 mt-1">Date when vehicle was allocated</p>
+              <p className="text-xs text-gray-500 mt-1">Required if vehicle is allocated</p>
+              {errors.dateOfAllotment && <p className="text-red-500 text-xs mt-1">{errors.dateOfAllotment}</p>}
             </div>
           </div>
         </div>
 
         {/* Documents Section */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Documents</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
+            <FileText size={20} className="text-blue-600" />
+            Documents
+          </h2>
           
           <div className="mb-4">
             <label className="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition inline-flex items-center gap-2">
@@ -451,7 +655,7 @@ const handleSubmit = async (e) => {
                     <FileText size={16} className="text-blue-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                      <p className="text-xs text-gray-500">{doc.size} KB • {doc.uploadDate}</p>
+                      <p className="text-xs text-gray-500">{doc.size} KB</p>
                     </div>
                   </div>
                   <button
@@ -478,10 +682,10 @@ const handleSubmit = async (e) => {
           </button>
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isSubmitting}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition disabled:opacity-50"
           >
-            {isLoading ? 'Adding Driver...' : 'Add Driver'}
+            {isSubmitting ? 'Adding Driver...' : 'Add Driver'}
           </button>
         </div>
       </form>
