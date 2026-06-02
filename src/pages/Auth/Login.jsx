@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
 
@@ -8,14 +8,32 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  
+  // ✅ Add this ref to prevent double submission
+  const isSubmitting = useRef(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    clearError();
     
-    const result = await login(email, password, rememberMe);
-    if (result.success) {
-      navigate('/dashboard');
+    // ✅ Prevent double submission
+    if (isSubmitting.current) {
+      console.log('Submission already in progress');
+      return;
+    }
+    
+    clearError();
+    isSubmitting.current = true;
+    
+    try {
+      const result = await login(email, password, rememberMe);
+      if (result.success) {
+        navigate('/dashboard');
+      }
+    } finally {
+      // Reset after 2 seconds
+      setTimeout(() => {
+        isSubmitting.current = false;
+      }, 2000);
     }
   };
 
@@ -27,7 +45,6 @@ export default function Login() {
         <div className="w-full max-w-sm">
           <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="space-y-6">
-              {/* Email Field with Floating Label */}
               <div className="relative">
                 <input
                   type="email"
@@ -35,7 +52,8 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-3 py-3 pt-5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 peer"
+                  disabled={isSubmitting.current || isLoading}
+                  className="w-full px-3 py-3 pt-5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 peer disabled:bg-gray-100"
                   placeholder=" "
                 />
                 <label
@@ -50,7 +68,6 @@ export default function Login() {
                 </label>
               </div>
 
-              {/* Password Field with Floating Label */}
               <div className="relative">
                 <input
                   type="password"
@@ -58,7 +75,8 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-3 py-3 pt-5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 peer"
+                  disabled={isSubmitting.current || isLoading}
+                  className="w-full px-3 py-3 pt-5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 peer disabled:bg-gray-100"
                   placeholder=" "
                 />
                 <label
@@ -73,13 +91,13 @@ export default function Login() {
                 </label>
               </div>
 
-              {/* Remember Me Checkbox */}
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={isSubmitting.current || isLoading}
                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
                   />
                   <span className="text-sm text-gray-700">Remember me</span>
@@ -94,21 +112,18 @@ export default function Login() {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isSubmitting.current || isLoading}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Signing in...' : 'Sign In'}
+                {isSubmitting.current || isLoading ? 'Signing in...' : 'Sign In'}
               </button>
             </div>
           </form>
         </div>
       </div>
 
-      {/* Footer with Current Year */}
       <footer className="text-center py-4">
-        <p className="text-sm text-gray-500">
-          © {currentYear} 
-        </p>
+        <p className="text-sm text-gray-500">© {currentYear}</p>
       </footer>
     </div>
   );

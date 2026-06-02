@@ -1,4 +1,4 @@
-// stores/logStore.js
+// stores/logStore.js - Complete fixed version
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '../services/api';
@@ -6,7 +6,11 @@ import api from '../services/api';
 // Global deduplication tracking
 const pendingRequests = new Map();
 const completedRequests = new Map();
-const requestQueue = [];
+
+// ✅ Enhanced login tracking
+let lastLoginTime = 0;
+let lastLoginEmail = null;
+let loginPromise = null;
 
 const useLogStore = create(
   (set, get) => ({
@@ -32,8 +36,7 @@ const useLogStore = create(
      * Generate a unique fingerprint for a log entry
      */
     generateFingerprint: (logEntry) => {
-      // Use a combination of unique identifiers
-      const timestamp = Math.floor(Date.now() / 2000); // 2 second window
+      const timestamp = Math.floor(Date.now() / 5000);
       return `${logEntry.action}_${logEntry.module}_${logEntry.userEmail}_${logEntry.targetId}_${logEntry.status}_${timestamp}`;
     },
 
@@ -41,13 +44,11 @@ const useLogStore = create(
      * Check if this log is a duplicate
      */
     isDuplicate: (fingerprint) => {
-      // Check pending requests
       if (pendingRequests.has(fingerprint)) {
         console.log('Duplicate prevented - request pending:', fingerprint);
         return true;
       }
       
-      // Check completed requests (last 5 seconds)
       if (completedRequests.has(fingerprint)) {
         const timestamp = completedRequests.get(fingerprint);
         if (Date.now() - timestamp < 5000) {
@@ -64,22 +65,17 @@ const useLogStore = create(
      * Add a new log entry with strong duplicate prevention
      */
     addLog: async (logEntry) => {
-      // Generate fingerprint
       const fingerprint = get().generateFingerprint(logEntry);
       
-      // Check for duplicates
       if (get().isDuplicate(fingerprint)) {
         console.log('🚫 Duplicate log blocked:', logEntry.action, logEntry.module);
         return null;
       }
       
-      // Mark as pending
       pendingRequests.set(fingerprint, Date.now());
-      
       set({ isLoading: true, error: null });
       
       try {
-        // Get current user
         let user = {};
         try {
           const userStr = localStorage.getItem('user');
@@ -98,7 +94,6 @@ const useLogStore = create(
           console.error('Failed to get user:', e);
         }
         
-        // Enrich log data
         const enrichedData = {
           userId: logEntry.userId || user.id,
           userEmail: logEntry.userEmail || user.email,
@@ -126,7 +121,6 @@ const useLogStore = create(
           }
         };
         
-        // Send to backend
         const response = await api.post('/audit-logs', enrichedData);
         
         const newLog = {
@@ -138,14 +132,12 @@ const useLogStore = create(
         };
         
         set((state) => ({
-          logs: [newLog, ...state.logs],
+          logs: [newLog, ...state.logs.slice(0, 499)],
           isLoading: false
         }));
         
-        // Mark as completed
         completedRequests.set(fingerprint, Date.now());
         
-        // Clean up after 5 seconds
         setTimeout(() => {
           completedRequests.delete(fingerprint);
           pendingRequests.delete(fingerprint);
@@ -161,7 +153,7 @@ const useLogStore = create(
     },
 
     /**
-     * Login log with session-based deduplication
+     * ✅ FIXED: Login log with multiple layers of deduplication
      */
     logLogin: async (status = 'SUCCESS', errorMessage = null, userEmail = null) => {
       // Get current user email
@@ -172,37 +164,62 @@ const useLogStore = create(
           const user = JSON.parse(userStr);
           currentUserEmail = currentUserEmail || user.email;
         }
-      } catch (e) {}
+        if (!currentUserEmail) {
+          const token = localStorage.getItem('token');
+          if (token) {
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              currentUserEmail = currentUserEmail || payload.email;
+            } catch (e) {}
+          }
+        }
+      } catch (e) {
+        console.error('Failed to get user:', e);
+      }
       
-      // Check session storage for recent login
+      const now = Date.now();
+      
+      // ✅ Layer 1: Check if there's already a login promise in progress
+      if (loginPromise) {
+        console.log('🚫 Login log already in progress, returning existing promise');
+        return loginPromise;
+      }
+      
+      // ✅ Layer 2: Check in-memory cache (within 5 seconds)
+      if (currentUserEmail === lastLoginEmail && (now - lastLoginTime) < 5000) {
+        console.log('🚫 Duplicate login log prevented (memory cache):', currentUserEmail);
+        return null;
+      }
+      
+      // ✅ Layer 3: Check session storage
       const sessionKey = `last_login_${currentUserEmail}`;
-      const lastLogin = sessionStorage.getItem(sessionKey);
-      
-      if (lastLogin && (Date.now() - parseInt(lastLogin)) < 5000) {
-        console.log('🚫 Duplicate login log prevented via session');
+      const lastLoginSession = sessionStorage.getItem(sessionKey);
+      if (lastLoginSession && (now - parseInt(lastLoginSession)) < 5000) {
+        console.log('🚫 Duplicate login log prevented (session storage):', currentUserEmail);
         return null;
       }
       
-      // Store in session storage
-      sessionStorage.setItem(sessionKey, Date.now().toString());
-      
-      // Also store in localStorage to prevent across tabs
+      // ✅ Layer 4: Check local storage (across tabs)
       const globalKey = `global_login_${currentUserEmail}`;
-      const lastGlobalLogin = localStorage.getItem(globalKey);
-      
-      if (lastGlobalLogin && (Date.now() - parseInt(lastGlobalLogin)) < 5000) {
-        console.log('🚫 Duplicate login log prevented via global storage');
+      const lastLoginGlobal = localStorage.getItem(globalKey);
+      if (lastLoginGlobal && (now - parseInt(lastLoginGlobal)) < 5000) {
+        console.log('🚫 Duplicate login log prevented (local storage):', currentUserEmail);
         return null;
       }
       
-      localStorage.setItem(globalKey, Date.now().toString());
+      // Update all tracking mechanisms
+      lastLoginTime = now;
+      lastLoginEmail = currentUserEmail;
+      sessionStorage.setItem(sessionKey, now.toString());
+      localStorage.setItem(globalKey, now.toString());
       
-      // Clean up after 5 seconds
+      // Clean up local storage after 5 seconds
       setTimeout(() => {
         localStorage.removeItem(globalKey);
       }, 5000);
       
-      return get().addLog({
+      // Create the log with a promise to prevent concurrent calls
+      loginPromise = get().addLog({
         action: 'LOGIN',
         module: 'AUTH',
         status,
@@ -216,6 +233,12 @@ const useLogStore = create(
           status: status
         }
       });
+      
+      // Clear the promise after completion
+      const result = await loginPromise;
+      loginPromise = null;
+      
+      return result;
     },
 
     /**
@@ -224,13 +247,14 @@ const useLogStore = create(
     logLogout: async (userEmail = null) => {
       const sessionKey = `last_logout_${userEmail}`;
       const lastLogout = sessionStorage.getItem(sessionKey);
+      const now = Date.now();
       
-      if (lastLogout && (Date.now() - parseInt(lastLogout)) < 5000) {
+      if (lastLogout && (now - parseInt(lastLogout)) < 3000) {
         console.log('🚫 Duplicate logout log prevented');
         return null;
       }
       
-      sessionStorage.setItem(sessionKey, Date.now().toString());
+      sessionStorage.setItem(sessionKey, now.toString());
       
       return get().addLog({
         action: 'LOGOUT',
@@ -304,6 +328,20 @@ const useLogStore = create(
     },
 
     /**
+     * Convenience method for VIEW action
+     */
+    logView: async (module, targetId, targetName) => {
+      return get().addLog({
+        action: 'VIEW',
+        module,
+        targetId,
+        targetModel: get().getModelName(module),
+        targetName,
+        description: `Viewed ${module.toLowerCase()}: ${targetName}`
+      });
+    },
+
+    /**
      * Get model name from module
      */
     getModelName: (module) => {
@@ -359,12 +397,6 @@ const useLogStore = create(
           } else if (response.data && response.data.data) {
             logsData = response.data.data;
             total = response.data.total || response.data.count || logsData.length;
-          } else if (Array.isArray(response)) {
-            logsData = response;
-            total = logsData.length;
-          } else if (response.logs) {
-            logsData = response.logs;
-            total = response.total || logsData.length;
           }
         }
         
@@ -375,13 +407,12 @@ const useLogStore = create(
           pages: Math.ceil(total / limit)
         };
         
-        set((state) => ({
+        set({
           logs: logsData,
           pagination: paginationData,
-          filters: { ...state.filters, ...filters },
           isLoading: false,
           error: null
-        }));
+        });
         
         return {
           data: logsData,
@@ -402,6 +433,23 @@ const useLogStore = create(
           pages: 0,
           error: errorMessage
         };
+      }
+    },
+
+    /**
+     * Fetch single log by ID
+     */
+    fetchLogById: async (id) => {
+      set({ isLoading: true, error: null });
+      
+      try {
+        const response = await api.get(`/audit-logs/${id}`);
+        set({ isLoading: false });
+        return response?.data || response;
+      } catch (error) {
+        console.error('Error fetching log by ID:', error);
+        set({ error: error.message, isLoading: false });
+        throw error;
       }
     },
 
@@ -427,12 +475,8 @@ const useLogStore = create(
         return response;
       } catch (error) {
         console.error('Error deleting log:', error);
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to delete log';
-        set({ 
-          error: errorMessage,
-          isLoading: false 
-        });
-        throw new Error(errorMessage);
+        set({ error: error.message, isLoading: false });
+        throw error;
       }
     },
 
@@ -458,12 +502,8 @@ const useLogStore = create(
         return response;
       } catch (error) {
         console.error('Error deleting multiple logs:', error);
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to delete logs';
-        set({ 
-          error: errorMessage,
-          isLoading: false 
-        });
-        throw new Error(errorMessage);
+        set({ error: error.message, isLoading: false });
+        throw error;
       }
     },
 
@@ -490,12 +530,8 @@ const useLogStore = create(
         return response;
       } catch (error) {
         console.error('Error clearing logs:', error);
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to clear logs';
-        set({ 
-          error: errorMessage,
-          isLoading: false 
-        });
-        throw new Error(errorMessage);
+        set({ error: error.message, isLoading: false });
+        throw error;
       }
     },
 
@@ -583,25 +619,30 @@ const useLogStore = create(
         }
       });
       
-      // Clear all deduplication caches
       pendingRequests.clear();
       completedRequests.clear();
       
-      // Clear session storage login tracking
+      lastLoginTime = 0;
+      lastLoginEmail = null;
+      loginPromise = null;
+      
+      const sessionKeysToRemove = [];
       for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
         if (key && (key.startsWith('last_login_') || key.startsWith('last_logout_'))) {
-          sessionStorage.removeItem(key);
+          sessionKeysToRemove.push(key);
         }
       }
+      sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
       
-      // Clear localStorage login tracking
+      const localKeysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('global_login_')) {
-          localStorage.removeItem(key);
+          localKeysToRemove.push(key);
         }
       }
+      localKeysToRemove.forEach(key => localStorage.removeItem(key));
     }
   }),
   {
