@@ -1,260 +1,616 @@
+// stores/logStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import api from '../services/api';
+
+// Global deduplication tracking
+const pendingRequests = new Map();
+const completedRequests = new Map();
+const requestQueue = [];
 
 const useLogStore = create(
-  persist(
-    (set, get) => ({
-      // State
-      logs: [], // Start with empty logs
-      isLoading: false,
-      error: null,
+  (set, get) => ({
+    logs: [],
+    isLoading: false,
+    error: null,
+    pagination: {
+      page: 1,
+      limit: 20,
+      total: 0,
+      pages: 0
+    },
+    filters: {
+      module: null,
+      action: null,
+      userId: null,
+      startDate: null,
+      endDate: null,
+      search: ''
+    },
 
-      // ==================== API INTEGRATION NOTES ====================
-      // TODO: Replace mock implementation with actual API calls
-      // API Endpoints to implement:
-      // - GET /api/logs - Fetch all logs with pagination
-      // - POST /api/logs - Create new log entry
-      // - DELETE /api/logs/:id - Delete specific log
-      // - DELETE /api/logs - Clear all logs (admin only)
-      // - GET /api/logs/filter - Get logs with filters (by user, action, entity, date range)
-      // ================================================================
+    /**
+     * Generate a unique fingerprint for a log entry
+     */
+    generateFingerprint: (logEntry) => {
+      // Use a combination of unique identifiers
+      const timestamp = Math.floor(Date.now() / 2000); // 2 second window
+      return `${logEntry.action}_${logEntry.module}_${logEntry.userEmail}_${logEntry.targetId}_${logEntry.status}_${timestamp}`;
+    },
 
-      /**
-       * Add a new log entry
-       * @param {Object} logEntry - The log entry to add
-       * @returns {Object} The created log entry
-       * 
-       * API Implementation:
-       * const response = await api.post('/logs', logEntry);
-       * return response.data;
-       */
-      addLog: (logEntry) => {
+    /**
+     * Check if this log is a duplicate
+     */
+    isDuplicate: (fingerprint) => {
+      // Check pending requests
+      if (pendingRequests.has(fingerprint)) {
+        console.log('Duplicate prevented - request pending:', fingerprint);
+        return true;
+      }
+      
+      // Check completed requests (last 5 seconds)
+      if (completedRequests.has(fingerprint)) {
+        const timestamp = completedRequests.get(fingerprint);
+        if (Date.now() - timestamp < 5000) {
+          console.log('Duplicate prevented - recent request:', fingerprint);
+          return true;
+        }
+        completedRequests.delete(fingerprint);
+      }
+      
+      return false;
+    },
+
+    /**
+     * Add a new log entry with strong duplicate prevention
+     */
+    addLog: async (logEntry) => {
+      // Generate fingerprint
+      const fingerprint = get().generateFingerprint(logEntry);
+      
+      // Check for duplicates
+      if (get().isDuplicate(fingerprint)) {
+        console.log('🚫 Duplicate log blocked:', logEntry.action, logEntry.module);
+        return null;
+      }
+      
+      // Mark as pending
+      pendingRequests.set(fingerprint, Date.now());
+      
+      set({ isLoading: true, error: null });
+      
+      try {
+        // Get current user
+        let user = {};
+        try {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            user = JSON.parse(userStr);
+          } else {
+            const token = localStorage.getItem('token');
+            if (token) {
+              try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                user = { id: payload.id, email: payload.email, role: payload.role, name: payload.name };
+              } catch (e) {}
+            }
+          }
+        } catch (e) {
+          console.error('Failed to get user:', e);
+        }
+        
+        // Enrich log data
+        const enrichedData = {
+          userId: logEntry.userId || user.id,
+          userEmail: logEntry.userEmail || user.email,
+          userRole: logEntry.userRole || user.role,
+          userName: logEntry.userName || user.name,
+          action: logEntry.action,
+          module: logEntry.module || logEntry.entityType,
+          targetId: logEntry.targetId || logEntry.entityId,
+          targetModel: logEntry.targetModel,
+          targetName: logEntry.targetName,
+          changes: logEntry.changes || {},
+          status: logEntry.status || 'SUCCESS',
+          description: logEntry.description,
+          errorMessage: logEntry.errorMessage,
+          metadata: {
+            ...logEntry.metadata,
+            clientTimestamp: new Date().toISOString(),
+            clientId: Math.random().toString(36).substring(7)
+          },
+          requestInfo: {
+            url: window.location.pathname,
+            userAgent: navigator.userAgent,
+            method: 'FRONTEND',
+            timestamp: new Date().toISOString()
+          }
+        };
+        
+        // Send to backend
+        const response = await api.post('/audit-logs', enrichedData);
+        
         const newLog = {
-          id: Date.now(),
+          id: response?.data?._id || response?._id || Date.now(),
+          _id: response?.data?._id || response?._id,
           timestamp: new Date().toISOString(),
-          formattedTime: new Date().toLocaleString(),
-          ...logEntry,
+          createdAt: new Date().toISOString(),
+          ...enrichedData,
         };
         
         set((state) => ({
           logs: [newLog, ...state.logs],
+          isLoading: false
         }));
         
-        // TODO: Uncomment when API is ready
-        // try {
-        //   const response = await api.post('/logs', newLog);
-        //   return response.data;
-        // } catch (error) {
-        //   console.error('Failed to save log to server:', error);
-        //   // Still save locally even if API fails
-        //   return newLog;
-        // }
+        // Mark as completed
+        completedRequests.set(fingerprint, Date.now());
         
-        return newLog;
-      },
-
-      /**
-       * Fetch all logs from server
-       * @returns {Array} List of all logs
-       * 
-       * API Implementation:
-       * const response = await api.get('/logs');
-       * set({ logs: response.data });
-       * return response.data;
-       */
-      fetchAllLogs: async () => {
-        set({ isLoading: true });
+        // Clean up after 5 seconds
+        setTimeout(() => {
+          completedRequests.delete(fingerprint);
+          pendingRequests.delete(fingerprint);
+        }, 5000);
         
-        // TODO: Uncomment when API is ready
-        // try {
-        //   const response = await api.get('/logs');
-        //   set({ logs: response.data, isLoading: false });
-        //   return response.data;
-        // } catch (error) {
-        //   set({ error: error.message, isLoading: false });
-        //   return [];
-        // }
-        
-        // Mock implementation (remove delay if not needed)
-        await new Promise(resolve => setTimeout(resolve, 500));
-        set({ isLoading: false });
-        return get().logs;
-      },
+        return response || newLog;
+      } catch (error) {
+        console.error('Failed to save log:', error);
+        set({ isLoading: false, error: error.message });
+        pendingRequests.delete(fingerprint);
+        return null;
+      }
+    },
 
-      /**
-       * Get all logs (from local state)
-       * @returns {Array} List of all logs
-       */
-      getAllLogs: () => get().logs,
+    /**
+     * Login log with session-based deduplication
+     */
+    logLogin: async (status = 'SUCCESS', errorMessage = null, userEmail = null) => {
+      // Get current user email
+      let currentUserEmail = userEmail;
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          currentUserEmail = currentUserEmail || user.email;
+        }
+      } catch (e) {}
+      
+      // Check session storage for recent login
+      const sessionKey = `last_login_${currentUserEmail}`;
+      const lastLogin = sessionStorage.getItem(sessionKey);
+      
+      if (lastLogin && (Date.now() - parseInt(lastLogin)) < 5000) {
+        console.log('🚫 Duplicate login log prevented via session');
+        return null;
+      }
+      
+      // Store in session storage
+      sessionStorage.setItem(sessionKey, Date.now().toString());
+      
+      // Also store in localStorage to prevent across tabs
+      const globalKey = `global_login_${currentUserEmail}`;
+      const lastGlobalLogin = localStorage.getItem(globalKey);
+      
+      if (lastGlobalLogin && (Date.now() - parseInt(lastGlobalLogin)) < 5000) {
+        console.log('🚫 Duplicate login log prevented via global storage');
+        return null;
+      }
+      
+      localStorage.setItem(globalKey, Date.now().toString());
+      
+      // Clean up after 5 seconds
+      setTimeout(() => {
+        localStorage.removeItem(globalKey);
+      }, 5000);
+      
+      return get().addLog({
+        action: 'LOGIN',
+        module: 'AUTH',
+        status,
+        errorMessage,
+        userEmail: currentUserEmail,
+        description: status === 'SUCCESS' 
+          ? `User ${currentUserEmail || ''} logged in successfully` 
+          : `Failed login attempt for ${currentUserEmail || ''}: ${errorMessage}`,
+        metadata: {
+          loginTime: new Date().toISOString(),
+          status: status
+        }
+      });
+    },
 
-      /**
-       * Get logs by user ID
-       * @param {number} userId - The user ID to filter by
-       * @returns {Array} Filtered logs
-       * 
-       * API Implementation:
-       * const response = await api.get(`/logs/user/${userId}`);
-       * return response.data;
-       */
-      getLogsByUser: (userId) => {
-        return get().logs.filter(log => log.userId === userId);
-      },
+    /**
+     * Logout log with deduplication
+     */
+    logLogout: async (userEmail = null) => {
+      const sessionKey = `last_logout_${userEmail}`;
+      const lastLogout = sessionStorage.getItem(sessionKey);
+      
+      if (lastLogout && (Date.now() - parseInt(lastLogout)) < 5000) {
+        console.log('🚫 Duplicate logout log prevented');
+        return null;
+      }
+      
+      sessionStorage.setItem(sessionKey, Date.now().toString());
+      
+      return get().addLog({
+        action: 'LOGOUT',
+        module: 'AUTH',
+        userEmail,
+        description: `User ${userEmail || ''} logged out`,
+        metadata: {
+          logoutTime: new Date().toISOString()
+        }
+      });
+    },
 
-      /**
-       * Get logs by user email
-       * @param {string} email - The user email to filter by
-       * @returns {Array} Filtered logs
-       */
-      getLogsByUserEmail: (email) => {
-        return get().logs.filter(log => log.userEmail === email);
-      },
+    /**
+     * Convenience method for CREATE action
+     */
+    logCreate: async (module, targetId, targetName, metadata = {}) => {
+      const fingerprint = get().generateFingerprint({ action: 'CREATE', module, targetId, userEmail: metadata.userEmail });
+      if (get().isDuplicate(fingerprint)) return null;
+      
+      return get().addLog({
+        action: 'CREATE',
+        module,
+        targetId,
+        targetModel: get().getModelName(module),
+        targetName,
+        metadata,
+        description: `Created new ${module.toLowerCase()}: ${targetName}`
+      });
+    },
 
-      /**
-       * Get logs by action type
-       * @param {string} action - The action type (CREATE, UPDATE, DELETE, VIEW, LOGIN, LOGOUT)
-       * @returns {Array} Filtered logs
-       * 
-       * API Implementation:
-       * const response = await api.get(`/logs/action/${action}`);
-       * return response.data;
-       */
-      getLogsByAction: (action) => {
-        return get().logs.filter(log => log.action === action);
-      },
+    /**
+     * Convenience method for UPDATE action
+     */
+    logUpdate: async (module, targetId, targetName, changes, metadata = {}) => {
+      if (!changes || Object.keys(changes).length === 0) {
+        console.log('Skipping UPDATE log - no changes detected');
+        return null;
+      }
+      
+      const fingerprint = get().generateFingerprint({ action: 'UPDATE', module, targetId });
+      if (get().isDuplicate(fingerprint)) return null;
+      
+      return get().addLog({
+        action: 'UPDATE',
+        module,
+        targetId,
+        targetModel: get().getModelName(module),
+        targetName,
+        changes,
+        metadata,
+        description: `Updated ${module.toLowerCase()}: ${targetName}`
+      });
+    },
 
-      /**
-       * Get logs by entity type
-       * @param {string} entityType - The entity type (DRIVER, VEHICLE, USER, etc.)
-       * @returns {Array} Filtered logs
-       * 
-       * API Implementation:
-       * const response = await api.get(`/logs/entity/${entityType}`);
-       * return response.data;
-       */
-      getLogsByEntity: (entityType) => {
-        return get().logs.filter(log => log.entityType === entityType);
-      },
+    /**
+     * Convenience method for DELETE action
+     */
+    logDelete: async (module, targetId, targetName, metadata = {}) => {
+      const fingerprint = get().generateFingerprint({ action: 'DELETE', module, targetId });
+      if (get().isDuplicate(fingerprint)) return null;
+      
+      return get().addLog({
+        action: 'DELETE',
+        module,
+        targetId,
+        targetModel: get().getModelName(module),
+        targetName,
+        metadata,
+        description: `Deleted ${module.toLowerCase()}: ${targetName}`
+      });
+    },
 
-      /**
-       * Get logs by date range
-       * @param {Date} startDate - Start date for filtering
-       * @param {Date} endDate - End date for filtering
-       * @returns {Array} Filtered logs within date range
-       * 
-       * API Implementation:
-       * const response = await api.get(`/logs/date-range?start=${startDate}&end=${endDate}`);
-       * return response.data;
-       */
-      getLogsByDateRange: (startDate, endDate) => {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        return get().logs.filter(log => {
-          const logDate = new Date(log.timestamp);
-          return logDate >= start && logDate <= end;
-        });
-      },
+    /**
+     * Get model name from module
+     */
+    getModelName: (module) => {
+      const map = {
+        'USER': 'User',
+        'DRIVER': 'Driver',
+        'VEHICLE': 'Vehicle',
+        'MAINTENANCE': 'Maintenance',
+        'ROLE': 'Role',
+        'AUTH': 'Auth',
+        'SYSTEM': 'System',
+        'LOCATION': 'Location',
+        'MAKE': 'Make',
+        'DESIGNATION': 'Designation'
+      };
+      return map[module] || module;
+    },
 
-      /**
-       * Get recent logs with limit
-       * @param {number} limit - Maximum number of logs to return (default: 50)
-       * @returns {Array} Recent logs
-       * 
-       * API Implementation:
-       * const response = await api.get(`/logs/recent?limit=${limit}`);
-       * return response.data;
-       */
-      getRecentLogs: (limit = 50) => {
-        return get().logs.slice(0, limit);
-      },
-
-      /**
-       * Get paginated logs
-       * @param {number} page - Page number (starting from 1)
-       * @param {number} limit - Items per page (default: 20)
-       * @returns {Object} Paginated logs with metadata
-       * 
-       * API Implementation:
-       * const response = await api.get(`/logs?page=${page}&limit=${limit}`);
-       * return response.data;
-       */
-      getPaginatedLogs: (page = 1, limit = 20) => {
-        const logs = get().logs;
-        const start = (page - 1) * limit;
-        const end = start + limit;
-        return {
-          data: logs.slice(start, end),
-          total: logs.length,
+    /**
+     * Fetch logs from API with pagination and filters
+     */
+    fetchLogs: async (page = 1, filters = {}) => {
+      set({ isLoading: true, error: null });
+      
+      try {
+        const limit = filters.limit || 20;
+        const queryParams = new URLSearchParams({
           page,
-          totalPages: Math.ceil(logs.length / limit),
-        };
-      },
-
-      /**
-       * Clear all logs (Admin only)
-       * @returns {boolean} Success status
-       * 
-       * API Implementation:
-       * await api.delete('/logs');
-       * set({ logs: [] });
-       */
-      clearAllLogs: () => {
-        set({ logs: [] });
-      },
-
-      /**
-       * Delete log by ID (Admin only)
-       * @param {number} id - The log ID to delete
-       * @returns {boolean} Success status
-       * 
-       * API Implementation:
-       * await api.delete(`/logs/${id}`);
-       */
-      deleteLog: (id) => {
-        set((state) => ({
-          logs: state.logs.filter(log => log.id !== id),
-        }));
-      },
-
-      /**
-       * Get logs count by action type
-       * @returns {Object} Object with action types as keys and counts as values
-       */
-      getLogsCountByAction: () => {
-        const counts = {};
-        get().logs.forEach(log => {
-          counts[log.action] = (counts[log.action] || 0) + 1;
+          limit,
+          sort: '-createdAt'
         });
-        return counts;
-      },
-
-      /**
-       * Get logs statistics
-       * @returns {Object} Statistics about logs
-       */
-      getLogsStats: () => {
-        const logs = get().logs;
-        return {
-          total: logs.length,
-          byAction: get().getLogsCountByAction(),
-          byEntity: logs.reduce((acc, log) => {
-            acc[log.entityType] = (acc[log.entityType] || 0) + 1;
-            return acc;
-          }, {}),
-          last7Days: logs.filter(log => {
-            const logDate = new Date(log.timestamp);
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            return logDate >= sevenDaysAgo;
-          }).length,
+        
+        if (filters.module) queryParams.append('module', filters.module);
+        if (filters.action) queryParams.append('action', filters.action);
+        if (filters.userId) queryParams.append('userId', filters.userId);
+        if (filters.userRole) queryParams.append('userRole', filters.userRole);
+        if (filters.startDate) queryParams.append('startDate', filters.startDate);
+        if (filters.endDate) queryParams.append('endDate', filters.endDate);
+        if (filters.search) queryParams.append('search', filters.search);
+        
+        const response = await api.get(`/audit-logs?${queryParams}`);
+        
+        let logsData = [];
+        let total = 0;
+        
+        if (response) {
+          if (Array.isArray(response.data)) {
+            logsData = response.data;
+            total = response.total || response.count || logsData.length;
+          } else if (response.data && response.data.logs) {
+            logsData = response.data.logs;
+            total = response.data.total || response.data.count || logsData.length;
+          } else if (response.data && response.data.data) {
+            logsData = response.data.data;
+            total = response.data.total || response.data.count || logsData.length;
+          } else if (Array.isArray(response)) {
+            logsData = response;
+            total = logsData.length;
+          } else if (response.logs) {
+            logsData = response.logs;
+            total = response.total || logsData.length;
+          }
+        }
+        
+        const paginationData = {
+          page: page,
+          limit: limit,
+          total: total,
+          pages: Math.ceil(total / limit)
         };
-      },
-    }),
-    {
-      name: 'log-storage',
-      // Keep only last 500 logs to avoid storage issues
-      partialize: (state) => ({ logs: state.logs.slice(0, 500) }),
+        
+        set((state) => ({
+          logs: logsData,
+          pagination: paginationData,
+          filters: { ...state.filters, ...filters },
+          isLoading: false,
+          error: null
+        }));
+        
+        return {
+          data: logsData,
+          ...paginationData
+        };
+      } catch (error) {
+        console.error('Error fetching logs:', error);
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch logs';
+        set({ 
+          error: errorMessage,
+          isLoading: false,
+          logs: []
+        });
+        return { 
+          data: [], 
+          total: 0, 
+          page: page, 
+          pages: 0,
+          error: errorMessage
+        };
+      }
+    },
+
+    /**
+     * Delete a log by ID (Admin only)
+     */
+    deleteLog: async (id) => {
+      set({ isLoading: true, error: null });
+      
+      try {
+        const response = await api.delete(`/audit-logs/${id}`);
+        
+        set((state) => ({
+          logs: state.logs.filter(log => log._id !== id && log.id !== id),
+          pagination: {
+            ...state.pagination,
+            total: Math.max(0, state.pagination.total - 1),
+            pages: Math.ceil(Math.max(0, state.pagination.total - 1) / state.pagination.limit)
+          },
+          isLoading: false
+        }));
+        
+        return response;
+      } catch (error) {
+        console.error('Error deleting log:', error);
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to delete log';
+        set({ 
+          error: errorMessage,
+          isLoading: false 
+        });
+        throw new Error(errorMessage);
+      }
+    },
+
+    /**
+     * Delete multiple logs by IDs (Admin only)
+     */
+    deleteMultipleLogs: async (ids) => {
+      set({ isLoading: true, error: null });
+      
+      try {
+        const response = await api.post('/audit-logs/delete-many', { ids });
+        
+        set((state) => ({
+          logs: state.logs.filter(log => !ids.includes(log._id) && !ids.includes(log.id)),
+          pagination: {
+            ...state.pagination,
+            total: Math.max(0, state.pagination.total - ids.length),
+            pages: Math.ceil(Math.max(0, state.pagination.total - ids.length) / state.pagination.limit)
+          },
+          isLoading: false
+        }));
+        
+        return response;
+      } catch (error) {
+        console.error('Error deleting multiple logs:', error);
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to delete logs';
+        set({ 
+          error: errorMessage,
+          isLoading: false 
+        });
+        throw new Error(errorMessage);
+      }
+    },
+
+    /**
+     * Clear all logs (Admin only)
+     */
+    clearAllLogs: async () => {
+      set({ isLoading: true, error: null });
+      
+      try {
+        const response = await api.delete('/audit-logs/all');
+        
+        set({ 
+          logs: [], 
+          isLoading: false,
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            pages: 0
+          }
+        });
+        
+        return response;
+      } catch (error) {
+        console.error('Error clearing logs:', error);
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to clear logs';
+        set({ 
+          error: errorMessage,
+          isLoading: false 
+        });
+        throw new Error(errorMessage);
+      }
+    },
+
+    /**
+     * Get recent logs from state
+     */
+    getRecentLogs: (limit = 20) => {
+      return get().logs.slice(0, limit);
+    },
+
+    /**
+     * Get all logs from state
+     */
+    getAllLogs: () => {
+      return get().logs;
+    },
+
+    /**
+     * Get current pagination info
+     */
+    getPaginationInfo: () => {
+      return get().pagination;
+    },
+
+    /**
+     * Get current filters
+     */
+    getCurrentFilters: () => {
+      return get().filters;
+    },
+
+    /**
+     * Set filters
+     */
+    setFilters: (filters) => {
+      set((state) => ({
+        filters: { ...state.filters, ...filters }
+      }));
+    },
+
+    /**
+     * Reset all filters
+     */
+    resetFilters: () => {
+      set({
+        filters: {
+          module: null,
+          action: null,
+          userId: null,
+          startDate: null,
+          endDate: null,
+          search: ''
+        }
+      });
+    },
+
+    /**
+     * Clear error message
+     */
+    clearError: () => {
+      set({ error: null });
+    },
+
+    /**
+     * Reset store to initial state
+     */
+    resetStore: () => {
+      set({
+        logs: [],
+        isLoading: false,
+        error: null,
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 0,
+          pages: 0
+        },
+        filters: {
+          module: null,
+          action: null,
+          userId: null,
+          startDate: null,
+          endDate: null,
+          search: ''
+        }
+      });
+      
+      // Clear all deduplication caches
+      pendingRequests.clear();
+      completedRequests.clear();
+      
+      // Clear session storage login tracking
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith('last_login_') || key.startsWith('last_logout_'))) {
+          sessionStorage.removeItem(key);
+        }
+      }
+      
+      // Clear localStorage login tracking
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('global_login_')) {
+          localStorage.removeItem(key);
+        }
+      }
     }
-  )
+  }),
+  {
+    name: 'log-storage',
+    partialize: (state) => ({ 
+      logs: state.logs.slice(0, 500),
+      filters: state.filters 
+    }),
+  }
 );
 
 export default useLogStore;

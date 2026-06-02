@@ -2,7 +2,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authAPI } from '../services/api';
-import Logger from '../utils/logger';
+import useLogStore from './logStore';
+
+// Track login attempts to prevent duplicates
+let lastLoginAttempt = 0;
+const LOGIN_DEDUPLICATION_WINDOW = 10000; // 10 seconds
 
 const useAuthStore = create(
   persist(
@@ -15,13 +19,21 @@ const useAuthStore = create(
 
       // Login with real API
       login: async (email, password, rememberMe = false) => {
+        // Prevent duplicate login attempts
+        const now = Date.now();
+        if (now - lastLoginAttempt < LOGIN_DEDUPLICATION_WINDOW) {
+          console.log('Duplicate login attempt prevented');
+          return { success: false, error: 'Please wait before trying again' };
+        }
+        lastLoginAttempt = now;
+        
         set({ isLoading: true, error: null });
         
         try {
           // Call actual API
           const response = await authAPI.login({ email, password });
           
-          console.log('Login API response:', response); // Debug log
+          console.log('Login API response:', response);
           
           // Store token based on rememberMe preference
           if (rememberMe) {
@@ -30,22 +42,22 @@ const useAuthStore = create(
             sessionStorage.setItem('token', response.token);
           }
           
-          // ✅ Transform user data to match your actual API response
+          // Transform user data to match your actual API response
           const user = {
             id: response.user.id || response.user._id,
             firstName: response.user.firstName,
             lastName: response.user.lastName,
             email: response.user.email,
             phone: response.user.phone || '',
-            role: response.user.roleName,  // ✅ Use roleName from API
+            role: response.user.roleName,
             roleName: response.user.roleName,
             department: response.user.department || '',
             location: response.user.location || '',
             employeeId: response.user.employeeId,
-            permissions: response.user.permissions || {}  // ✅ Store permissions object
+            permissions: response.user.permissions || {}
           };
           
-          console.log('Stored user object:', user); // Debug log
+          console.log('Stored user object:', user);
           
           set({
             user: user,
@@ -55,16 +67,24 @@ const useAuthStore = create(
             error: null
           });
           
-          Logger.login(user);
+          // Create login log using log store (only once)
+          await useLogStore.getState().logLogin('SUCCESS', null, email);
+          
           return { success: true, user };
           
         } catch (error) {
           console.error('Login error:', error);
+          const errorMessage = error.message || 'Invalid email or password';
+          
           set({
-            error: error.message || 'Invalid email or password',
+            error: errorMessage,
             isLoading: false
           });
-          return { success: false, error: error.message };
+          
+          // Create failed login log
+          await useLogStore.getState().logLogin('FAILED', errorMessage, email);
+          
+          return { success: false, error: errorMessage };
         }
       },
 
@@ -78,7 +98,11 @@ const useAuthStore = create(
         } catch (error) {
           console.error('Logout API error:', error);
         } finally {
-          if (user) Logger.logout(user);
+          // Create logout log
+          if (user && user.email) {
+            await useLogStore.getState().logLogout(user.email);
+          }
+          
           localStorage.removeItem('token');
           sessionStorage.removeItem('token');
           
@@ -146,11 +170,12 @@ const useAuthStore = create(
       
       updateUser: (userData) => set({ user: { ...get().user, ...userData } }),
       
-      // Check if user has specific permission (using actual permissions object)
+      // Check if user has specific permission
       hasPermission: (action) => {
         const { user } = get();
         if (!user) return false;
-        // Check from permissions object returned from API
+        // Admin and Super Admin have all permissions
+        if (user.role === 'Admin' || user.role === 'Super Admin') return true;
         return user.permissions?.[action] === true;
       },
       
@@ -162,6 +187,13 @@ const useAuthStore = create(
           return role.includes(user.role);
         }
         return user.role === role;
+      },
+      
+      // Get user full name
+      getFullName: () => {
+        const { user } = get();
+        if (!user) return '';
+        return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
       }
     }),
     {

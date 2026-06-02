@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Users, Car, UserCog, Eye, Edit, Trash2, Plus, Clock, Activity } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, Car, UserCog, Trash2, Clock, Activity, RefreshCw, Trash, Eye, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import useDriverStore from '../../stores/driverStore';
 import useVehicleStore from '../../stores/vehicleStore';
 import useUserStore from '../../stores/userStore';
@@ -7,29 +8,178 @@ import useLedgerStore from '../../stores/ledgerStore';
 import useLogStore from '../../stores/logStore';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [selectedDesignation, setSelectedDesignation] = useState('all');
   const [recentLogs, setRecentLogs] = useState([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [deletingLogId, setDeletingLogId] = useState(null);
 
   // Get data from stores
-  const { drivers, fetchDrivers, totalDrivers } = useDriverStore();
-  const { vehicles, fetchVehicles, totalVehicles } = useVehicleStore();
-  const { users, fetchUsers, totalUsers } = useUserStore();
+  const { drivers, fetchDrivers } = useDriverStore();
+  const { vehicles, fetchVehicles } = useVehicleStore();
+  const { users, fetchUsers } = useUserStore();
   const { designations, fetchDesignations } = useLedgerStore();
-  const { getAllLogs, getRecentLogs } = useLogStore();
+  const { fetchLogs, deleteLog, clearAllLogs } = useLogStore();
+
+  // Get current user from localStorage to check if admin
+  const getCurrentUser = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user;
+      }
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          return { role: payload.role, name: payload.name, email: payload.email };
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.error('Failed to get user:', e);
+    }
+    return null;
+  };
+
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin' || currentUser?.role === 'admin';
+
+  // Function to load logs from database (only 10 logs)
+  const loadRecentLogsFromDB = useCallback(async () => {
+    setIsLoadingLogs(true);
+    try {
+      // Fetch only 10 logs for dashboard
+      const result = await fetchLogs(1, { limit: 10 });
+      
+      if (result && result.data && result.data.length > 0) {
+        const formattedLogs = result.data.map(formatLogFromDB);
+        setRecentLogs(formattedLogs);
+      } else {
+        setRecentLogs([]);
+      }
+    } catch (error) {
+      console.error('Error loading logs:', error);
+      setRecentLogs([]);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [fetchLogs]);
+
+  // Auto-refresh every 10 seconds (less frequent for dashboard)
+  useEffect(() => {
+    let interval;
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        loadRecentLogsFromDB();
+      }, 10000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh, loadRecentLogsFromDB]);
 
   // Fetch data on component mount
   useEffect(() => {
-    fetchDrivers();
-    fetchVehicles();
-    fetchUsers();
-    if (fetchDesignations) fetchDesignations();
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          fetchDrivers(),
+          fetchVehicles(),
+          fetchUsers(),
+          fetchDesignations ? fetchDesignations() : Promise.resolve()
+        ]);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      }
+    };
     
-    // Load recent logs (last 20)
-    const logs = getRecentLogs(20);
-    setRecentLogs(logs);
+    loadData();
+    loadRecentLogsFromDB();
   }, []);
 
-  // Stats from store data
+  // Handle delete single log
+  const handleDeleteLog = async (logId) => {
+    if (!isAdmin) {
+      alert('Only admin users can delete logs');
+      return;
+    }
+    
+    setDeletingLogId(logId);
+    try {
+      await deleteLog(logId);
+      await loadRecentLogsFromDB();
+    } catch (error) {
+      console.error('Error deleting log:', error);
+      alert(error.response?.data?.message || 'Failed to delete log');
+    } finally {
+      setDeletingLogId(null);
+    }
+  };
+
+  // Handle clear all logs
+  const handleClearAllLogs = async () => {
+    if (!isAdmin) {
+      alert('Only admin users can delete logs');
+      return;
+    }
+    
+    if (window.confirm('⚠️ Are you sure you want to delete ALL logs? This action cannot be undone.')) {
+      try {
+        await clearAllLogs();
+        await loadRecentLogsFromDB();
+        alert('All logs have been cleared successfully');
+      } catch (error) {
+        console.error('Error clearing logs:', error);
+        alert(error.response?.data?.message || 'Failed to clear logs');
+      }
+    }
+  };
+
+  // Navigate to activity logs page
+  const handleViewAllLogs = () => {
+    navigate('/activity-logs');
+  };
+
+  // Format database log
+  const formatLogFromDB = (dbLog) => {
+    return {
+      id: dbLog._id || dbLog.id,
+      action: dbLog.action || 'UNKNOWN',
+      userName: dbLog.userName || dbLog.userEmail || dbLog.user?.name || 'System',
+      userRole: dbLog.userRole || dbLog.user?.role || 'User',
+      entityType: dbLog.module || dbLog.entityType || 'SYSTEM',
+      details: dbLog.changes || dbLog.details || {},
+      description: dbLog.description || '',
+      timestamp: dbLog.timestamp || dbLog.createdAt,
+      formattedTime: formatTimestamp(dbLog.timestamp || dbLog.createdAt)
+    };
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins} min ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+      
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return 'Invalid date';
+    }
+  };
+
+  // Stats
   const stats = [
     { 
       title: 'Total Drivers', 
@@ -57,26 +207,14 @@ export default function Dashboard() {
     },
   ];
 
-  const getActionIcon = (action) => {
-    switch(action) {
-      case 'CREATE': return <Plus size={14} className="text-green-600" />;
-      case 'UPDATE': return <Edit size={14} className="text-blue-600" />;
-      case 'DELETE': return <Trash2 size={14} className="text-red-600" />;
-      case 'VIEW': return <Eye size={14} className="text-gray-600" />;
-      case 'LOGIN': return <Activity size={14} className="text-purple-600" />;
-      case 'LOGOUT': return <Activity size={14} className="text-orange-600" />;
-      default: return <Clock size={14} className="text-gray-400" />;
-    }
-  };
-
   const getActionBadgeColor = (action) => {
-    switch(action) {
+    switch(action?.toUpperCase()) {
       case 'CREATE': return 'bg-green-100 text-green-800';
       case 'UPDATE': return 'bg-blue-100 text-blue-800';
       case 'DELETE': return 'bg-red-100 text-red-800';
-      case 'VIEW': return 'bg-gray-100 text-gray-800';
       case 'LOGIN': return 'bg-purple-100 text-purple-800';
       case 'LOGOUT': return 'bg-orange-100 text-orange-800';
+      case 'VIEW': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -94,16 +232,6 @@ export default function Dashboard() {
     }
   };
 
-  const getEntityIcon = (entityType) => {
-    switch(entityType) {
-      case 'DRIVER': return <Users size={14} className="text-blue-600" />;
-      case 'VEHICLE': return <Car size={14} className="text-green-600" />;
-      case 'USER': return <UserCog size={14} className="text-purple-600" />;
-      default: return <Clock size={14} className="text-gray-400" />;
-    }
-  };
-
-  // Get unique designations from ledger store for filter dropdown
   const getUniqueDesignations = () => {
     if (designations && designations.length > 0) {
       return designations.map(d => d.name);
@@ -111,15 +239,13 @@ export default function Dashboard() {
     return ['Super Admin', 'Admin', 'Manager', 'Senior Driver', 'Junior Driver', 'Staff', 'Viewer'];
   };
 
-  // Filter logs by designation
   const filteredLogs = selectedDesignation === 'all' 
     ? recentLogs 
-    : recentLogs.filter(log => log.userRole === selectedDesignation || log.userName === selectedDesignation);
+    : recentLogs.filter(log => log.userRole === selectedDesignation);
 
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      
-      {/* Stats Cards Section */}
+      {/* Stats Cards */}
       <div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {stats.map((stat, index) => {
@@ -147,137 +273,159 @@ export default function Dashboard() {
 
       {/* Activity Logs Section */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Activity size={20} className="text-gray-600" />
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Activity size={20} className="text-blue-600" />
+              </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Recent Activity Logs</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Latest system activities and user actions
+                <p className="text-sm text-gray-500">
+                  Showing last {recentLogs.length} activities {autoRefresh && '(Auto-refreshing every 10s)'}
                 </p>
               </div>
             </div>
             
-            {/* Designation Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Filter by:</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                  autoRefresh ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-600 border border-gray-300'
+                }`}
+              >
+                <RefreshCw size={14} className={`inline mr-1 ${autoRefresh ? 'animate-spin-slow' : ''}`} />
+                Auto
+              </button>
+              
+              <button
+                onClick={loadRecentLogsFromDB}
+                disabled={isLoadingLogs}
+                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                {isLoadingLogs ? 'Loading...' : 'Refresh'}
+              </button>
+              
+              {isAdmin && recentLogs.length > 0 && (
+                <button
+                  onClick={handleClearAllLogs}
+                  className="px-3 py-1.5 text-sm bg-red-50 text-red-600 border border-red-300 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <Trash size={14} className="inline mr-1" />
+                  Clear All
+                </button>
+              )}
+              
               <select
                 value={selectedDesignation}
                 onChange={(e) => setSelectedDesignation(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Designations</option>
                 {getUniqueDesignations().map((designation) => (
-                  <option key={designation} value={designation}>
-                    {designation}
-                  </option>
+                  <option key={designation} value={designation}>{designation}</option>
                 ))}
               </select>
             </div>
           </div>
         </div>
 
-        {/* Logs Table */}
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Timestamp
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  User
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Designation
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Entity
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Details
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Clock size={14} className="text-gray-400" />
-                        <span className="text-sm text-gray-600">{log.formattedTime || log.timestamp}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getActionBadgeColor(log.action)}`}>
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-blue-600">
-                            {log.userName?.charAt(0) || 'U'}
-                          </span>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{log.userName}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getDesignationBadgeColor(log.userRole)}`}>
-                        {log.userRole || 'User'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {getEntityIcon(log.entityType)}
-                        <span className="text-sm text-gray-600">{log.entityType}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600">
-                        {log.entityType === 'DRIVER' && `Driver: ${log.details?.name || log.details?.employeeId || log.entityId}`}
-                        {log.entityType === 'VEHICLE' && `Vehicle: ${log.details?.make} ${log.details?.model || log.entityId}`}
-                        {log.entityType === 'USER' && `User: ${log.details?.name || log.entityId}`}
-                        {log.entityType === 'AUTH' && `${log.action === 'LOGIN' ? 'Login: ' : 'Logout: '} ${log.details?.email}`}
-                        {log.entityType === 'DESIGNATION' && `Designation: ${log.details?.name}`}
-                        {log.entityType === 'LOCATION' && `Location: ${log.details?.name}`}
-                        {log.entityType === 'MAKE' && `Make: ${log.details?.name}`}
-                        {!log.details && `ID: ${log.entityId}`}
-                      </div>
-                    </td>
+          {/* Table rows with refresh effect */}
+          <div className={`transition-opacity duration-300 ${isLoadingLogs ? 'opacity-50' : 'opacity-100'}`}>
+            {filteredLogs.length === 0 && !isLoadingLogs ? (
+              <div className="text-center py-12">
+                <Activity size={48} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-500 font-medium">No activity logs found</p>
+                <p className="text-sm text-gray-400 mt-1">Activities will appear here as users interact with the system</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b sticky top-0">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                    {isAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>}
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <Activity size={48} className="text-gray-300" />
-                      <p className="text-gray-500">No activity logs found</p>
-                      <p className="text-xs text-gray-400">Activities will appear here as users interact with the system</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} className="text-gray-400" />
+                          <span className="text-sm text-gray-600">{log.formattedTime}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getActionBadgeColor(log.action)}`}>
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-blue-600">
+                              {log.userName?.charAt(0)?.toUpperCase() || 'U'}
+                            </span>
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">{log.userName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getDesignationBadgeColor(log.userRole)}`}>
+                          {log.userRole || 'User'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-gray-600">{log.entityType}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-600 max-w-md truncate" title={log.description || JSON.stringify(log.details)}>
+                          {log.description || (typeof log.details === 'object' ? JSON.stringify(log.details).substring(0, 80) : log.details || 'N/A')}
+                        </div>
+                      </td>
+                      {isAdmin && (
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => handleDeleteLog(log.id)}
+                            disabled={deletingLogId === log.id}
+                            className="text-red-600 hover:text-red-800 transition-colors disabled:opacity-50"
+                            title="Delete log"
+                          >
+                            {deletingLogId === log.id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-
-        {/* View All Logs Button */}
+        
+        {/* View All Logs Button - Centered */}
         {filteredLogs.length > 0 && (
-          <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 text-center">
-            <button
-              onClick={() => window.location.href = '/activity-logs'}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              View All Activity Logs →
-            </button>
+          <div className="px-6 py-5 border-t border-gray-200 bg-gray-50">
+            <div className="flex justify-center">
+              <button
+                onClick={handleViewAllLogs}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all transform hover:scale-105 shadow-md font-medium"
+              >
+                <Eye size={18} />
+                <span>View All Activity Logs</span>
+                <ChevronRight size={18} />
+              </button>
+            </div>
           </div>
         )}
       </div>
