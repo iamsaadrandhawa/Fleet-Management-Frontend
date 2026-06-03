@@ -1,76 +1,111 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 
+const AVAILABLE_TABS = [
+  { id: 'dashboard', name: 'Dashboard', path: '/dashboard' },
+  { id: 'add-driver', name: 'Add Driver', path: '/add-driver' },
+  { id: 'add-vehicle', name: 'Add Vehicle', path: '/add-vehicle' },
+  { id: 'driver-list', name: 'Driver List', path: '/driver-list' },
+  { id: 'vehicle-list', name: 'Vehicle List', path: '/vehicle-list' },
+  { id: 'users', name: 'Users', path: '/users' },
+  { id: 'ledgers', name: 'Ledgers', path: '/ledgers' },
+  { id: 'settings', name: 'Settings', path: '/settings' },
+];
+
 export default function LedgerFormModal({ 
   isEditing, 
   item, 
   tabName,
-  tabId, // Add tabId to identify which ledger type
+  tabId,
   onSubmit, 
   onClose 
 }) {
-  const [formData, setFormData] = useState({
-    name: item?.name || '',
-    code: item?.code || '',
-    description: item?.description || '',
-    permissions: item?.permissions || {
-      create: false,
-      read: false,
-      update: false,
-      delete: false
-    }
-  });
+  const [name, setName] = useState(item?.name || '');
+  const [code, setCode] = useState(item?.code || '');
+  const [description, setDescription] = useState(item?.description || '');
+  
+  const [canCreate, setCanCreate] = useState(item?.permissions?.create || false);
+  const [canRead, setCanRead] = useState(item?.permissions?.read || false);
+  const [canUpdate, setCanUpdate] = useState(item?.permissions?.update || false);
+  const [canDelete, setCanDelete] = useState(item?.permissions?.delete || false);
+  
+  const [tabDashboard, setTabDashboard] = useState(item?.tabPermissions?.dashboard || false);
+  const [tabAddDriver, setTabAddDriver] = useState(item?.tabPermissions?.['add-driver'] || false);
+  const [tabAddVehicle, setTabAddVehicle] = useState(item?.tabPermissions?.['add-vehicle'] || false);
+  const [tabDriverList, setTabDriverList] = useState(item?.tabPermissions?.['driver-list'] || false);
+  const [tabVehicleList, setTabVehicleList] = useState(item?.tabPermissions?.['vehicle-list'] || false);
+  const [tabUsers, setTabUsers] = useState(item?.tabPermissions?.users || false);
+  const [tabLedgers, setTabLedgers] = useState(item?.tabPermissions?.ledgers || false);
+  const [tabSettings, setTabSettings] = useState(item?.tabPermissions?.settings || false);
 
   const [errors, setErrors] = useState({});
-
   const isRoleTab = tabId === 'roles';
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: '' });
-    }
-  };
-
-  const handlePermissionChange = (permission) => {
-    setFormData({
-      ...formData,
-      permissions: {
-        ...formData.permissions,
-        [permission]: !formData.permissions[permission]
-      }
-    });
-  };
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.name) newErrors.name = 'Name is required';
-    if (!formData.code) newErrors.code = 'Code is required';
+    if (!name.trim()) newErrors.name = 'Name is required';
+    if (!code.trim()) newErrors.code = 'Code is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      // For roles, include permissions in the submission
-      if (isRoleTab) {
-        onSubmit({
-          name: formData.name,
-          code: formData.code,
-          description: formData.description,
-          permissions: formData.permissions
-        });
-      } else {
-        onSubmit(formData);
+    
+    if (!validateForm()) return;
+    
+    const submissionData = {
+      name: name.trim(),
+      code: code.trim(),
+      description: description.trim(),
+      permissions: {
+        create: canCreate,
+        read: canRead,
+        update: canUpdate,
+        delete: canDelete
+      },
+      tabPermissions: {
+        dashboard: tabDashboard,
+        'add-driver': tabAddDriver,
+        'add-vehicle': tabAddVehicle,
+        'driver-list': tabDriverList,
+        'vehicle-list': tabVehicleList,
+        users: tabUsers,
+        ledgers: tabLedgers,
+        settings: tabSettings
       }
-    }
+    };
+    
+    console.log('📤 SUBMITTING:', submissionData);
+    onSubmit(submissionData);
+  };
+
+  const handleSelectAllTabs = () => {
+    const allSelected = tabDashboard && tabAddDriver && tabAddVehicle && tabDriverList && 
+                        tabVehicleList && tabUsers && tabLedgers && tabSettings;
+    const newValue = !allSelected;
+    setTabDashboard(newValue);
+    setTabAddDriver(newValue);
+    setTabAddVehicle(newValue);
+    setTabDriverList(newValue);
+    setTabVehicleList(newValue);
+    setTabUsers(newValue);
+    setTabLedgers(newValue);
+    setTabSettings(newValue);
+  };
+
+  const handleSelectAllCRUD = () => {
+    const allSelected = canCreate && canRead && canUpdate && canDelete;
+    const newValue = !allSelected;
+    setCanCreate(newValue);
+    setCanRead(newValue);
+    setCanUpdate(newValue);
+    setCanDelete(newValue);
   };
 
   return (
     <div className="fixed inset-0 backdrop-blur-md bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-6 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-bold text-gray-900">
             {isEditing ? 'Edit' : 'Add'} {tabName}
@@ -87,13 +122,12 @@ export default function LedgerFormModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
               <input
                 type="text"
-                name="name"
-                placeholder="Enter name"
-                value={formData.name}
-                onChange={handleChange}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.name ? 'border-red-500' : 'border-gray-300'
                 }`}
+                placeholder="Enter role name"
               />
               {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
             </div>
@@ -103,84 +137,200 @@ export default function LedgerFormModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">Code *</label>
               <input
                 type="text"
-                name="code"
-                placeholder="Enter code (e.g., SR-DRV)"
-                value={formData.code}
-                onChange={handleChange}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
                   errors.code ? 'border-red-500' : 'border-gray-300'
                 }`}
+                placeholder="Enter unique code"
               />
               {errors.code && <p className="text-red-500 text-xs mt-1">{errors.code}</p>}
             </div>
 
             {/* Permissions Section - Only for Roles Tab */}
             {isRoleTab && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  CRUD Permissions
-                </label>
-                <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                  <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                    <input
-                      type="checkbox"
-                      checked={formData.permissions.create}
-                      onChange={() => handlePermissionChange('create')}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Create</span>
-                    <span className="text-xs text-gray-500 ml-auto">Can create new records</span>
-                  </label>
-                  
-                  <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                    <input
-                      type="checkbox"
-                      checked={formData.permissions.read}
-                      onChange={() => handlePermissionChange('read')}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Read (View)</span>
-                    <span className="text-xs text-gray-500 ml-auto">Can view records</span>
-                  </label>
-                  
-                  <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                    <input
-                      type="checkbox"
-                      checked={formData.permissions.update}
-                      onChange={() => handlePermissionChange('update')}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Update</span>
-                    <span className="text-xs text-gray-500 ml-auto">Can edit records</span>
-                  </label>
-                  
-                  <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
-                    <input
-                      type="checkbox"
-                      checked={formData.permissions.delete}
-                      onChange={() => handlePermissionChange('delete')}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Delete</span>
-                    <span className="text-xs text-gray-500 ml-auto">Can delete records</span>
-                  </label>
+              <>
+                {/* CRUD Permissions */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      CRUD Permissions
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllCRUD}
+                      className="text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {canCreate && canRead && canUpdate && canDelete ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={canCreate}
+                        onChange={(e) => setCanCreate(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Create</span>
+                      <span className="text-xs text-gray-500 ml-auto">Can create new records</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={canRead}
+                        onChange={(e) => setCanRead(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Read (View)</span>
+                      <span className="text-xs text-gray-500 ml-auto">Can view records</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={canUpdate}
+                        onChange={(e) => setCanUpdate(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Update</span>
+                      <span className="text-xs text-gray-500 ml-auto">Can edit records</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={canDelete}
+                        onChange={(e) => setCanDelete(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Delete</span>
+                      <span className="text-xs text-gray-500 ml-auto">Can delete records</span>
+                    </label>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Select which operations this role can perform
-                </p>
-              </div>
+
+                {/* Tab Permissions Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Tab Access Permissions
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllTabs}
+                      className="text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {tabDashboard && tabAddDriver && tabAddVehicle && tabDriverList && 
+                       tabVehicleList && tabUsers && tabLedgers && tabSettings ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200 max-h-60 overflow-y-auto">
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabDashboard}
+                        onChange={(e) => setTabDashboard(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Dashboard</span>
+                      <span className="text-xs text-gray-500 ml-auto">/dashboard</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabAddDriver}
+                        onChange={(e) => setTabAddDriver(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Add Driver</span>
+                      <span className="text-xs text-gray-500 ml-auto">/add-driver</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabAddVehicle}
+                        onChange={(e) => setTabAddVehicle(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Add Vehicle</span>
+                      <span className="text-xs text-gray-500 ml-auto">/add-vehicle</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabDriverList}
+                        onChange={(e) => setTabDriverList(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Driver List</span>
+                      <span className="text-xs text-gray-500 ml-auto">/driver-list</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabVehicleList}
+                        onChange={(e) => setTabVehicleList(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Vehicle List</span>
+                      <span className="text-xs text-gray-500 ml-auto">/vehicle-list</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabUsers}
+                        onChange={(e) => setTabUsers(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Users</span>
+                      <span className="text-xs text-gray-500 ml-auto">/users</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabLedgers}
+                        onChange={(e) => setTabLedgers(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Ledgers</span>
+                      <span className="text-xs text-gray-500 ml-auto">/ledgers</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={tabSettings}
+                        onChange={(e) => setTabSettings(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Settings</span>
+                      <span className="text-xs text-gray-500 ml-auto">/settings</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Select which tabs/sections this role can access
+                  </p>
+                </div>
+              </>
             )}
             
             {/* Description Field */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea
-                name="description"
-                placeholder="Optional description"
-                value={formData.description}
-                onChange={handleChange}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                 rows="3"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                placeholder="Optional description"
               />
             </div>
           </div>

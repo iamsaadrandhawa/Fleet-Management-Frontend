@@ -65,21 +65,37 @@ const useLedgerStore = create(
         }
       },
 
+      // ADD ROLE - WITH TAB PERMISSIONS
       addRole: async (item) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await ledgerAPI.addRole({
+          // Make sure tabPermissions is included
+          const roleData = {
             name: item.name,
-            description: item.description,
             code: item.code,
+            description: item.description || '',
             permissions: item.permissions || {
               create: false,
               read: false,
               update: false,
               delete: false
             },
+            tabPermissions: item.tabPermissions || {
+              dashboard: false,
+              'add-driver': false,
+              'add-vehicle': false,
+              'driver-list': false,
+              'vehicle-list': false,
+              users: false,
+              ledgers: false,
+              settings: false
+            },
             status: item.status || 'active'
-          });
+          };
+          
+          console.log('📤 Sending role data to API:', JSON.stringify(roleData, null, 2));
+          
+          const response = await ledgerAPI.addRole(roleData);
           
           const newItem = response.data;
           set(state => ({ 
@@ -87,9 +103,12 @@ const useLedgerStore = create(
             isLoading: false 
           }));
           
+          console.log('✅ Role created with tabPermissions:', newItem.tabPermissions);
+          
           Logger.addRole?.(newItem);
           return { success: true, data: newItem };
         } catch (error) {
+          console.error('Add role error:', error);
           set({ 
             error: error.message || 'Failed to add role', 
             isLoading: false 
@@ -98,10 +117,36 @@ const useLedgerStore = create(
         }
       },
 
+      // UPDATE ROLE - WITH TAB PERMISSIONS (SINGLE VERSION)
       updateRole: async (id, updatedData) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await ledgerAPI.updateRole(id, updatedData);
+          const roleData = {
+            name: updatedData.name,
+            code: updatedData.code,
+            description: updatedData.description || '',
+            permissions: updatedData.permissions || {
+              create: false,
+              read: false,
+              update: false,
+              delete: false
+            },
+            tabPermissions: updatedData.tabPermissions || {
+              dashboard: false,
+              'add-driver': false,
+              'add-vehicle': false,
+              'driver-list': false,
+              'vehicle-list': false,
+              users: false,
+              ledgers: false,
+              settings: false
+            },
+            status: updatedData.status || 'active'
+          };
+          
+          console.log('📝 Updating role data:', JSON.stringify(roleData, null, 2));
+          
+          const response = await ledgerAPI.updateRole(id, roleData);
           const updatedItem = response.data;
           
           set(state => ({
@@ -111,9 +156,12 @@ const useLedgerStore = create(
             isLoading: false
           }));
           
+          console.log('✅ Role updated with tabPermissions:', updatedItem.tabPermissions);
+          
           Logger.updateRole?.(updatedItem);
           return { success: true, data: updatedItem };
         } catch (error) {
+          console.error('Update role error:', error);
           set({ 
             error: error.message || 'Failed to update role', 
             isLoading: false 
@@ -122,6 +170,7 @@ const useLedgerStore = create(
         }
       },
 
+      // DELETE ROLE
       deleteRole: async (id) => {
         set({ isLoading: true, error: null });
         try {
@@ -480,7 +529,10 @@ const useLedgerStore = create(
       addFuelType: async (item) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await ledgerAPI.addFuelType({ name: item.name, code: item.code });
+          const response = await ledgerAPI.addFuelType({ 
+            name: item.name, 
+            code: item.code 
+          });
           const newItem = response.data;
           set(state => ({ fuelTypes: [...state.fuelTypes, newItem], isLoading: false }));
           Logger.addFuelType?.(newItem);
@@ -545,7 +597,10 @@ const useLedgerStore = create(
       addTransmission: async (item) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await ledgerAPI.addTransmission({ name: item.name, code: item.code });
+          const response = await ledgerAPI.addTransmission({ 
+            name: item.name, 
+            code: item.code 
+          });
           const newItem = response.data;
           set(state => ({ transmissionTypes: [...state.transmissionTypes, newItem], isLoading: false }));
           Logger.addTransmission?.(newItem);
@@ -604,6 +659,29 @@ const useLedgerStore = create(
       getActiveVehicleCategories: () => get().vehicleCategories.filter(c => c.status === 'active'),
       getActiveFuelTypes: () => get().fuelTypes.filter(f => f.status === 'active'),
       getActiveTransmissionTypes: () => get().transmissionTypes.filter(t => t.status === 'active'),
+
+      getRoleById: (id) => get().roles.find(r => r._id === id || r.id === id),
+      
+      getRolePermissions: (id) => {
+        const role = get().roles.find(r => r._id === id || r.id === id);
+        return role?.permissions || null;
+      },
+      
+      getRoleTabPermissions: (id) => {
+        const role = get().roles.find(r => r._id === id || r.id === id);
+        return role?.tabPermissions || null;
+      },
+      
+      roleHasTabAccess: (roleId, tabId) => {
+        const role = get().roles.find(r => r._id === roleId || r.id === roleId);
+        return role?.tabPermissions?.[tabId] === true;
+      },
+      
+      getRoleAccessibleTabs: (roleId) => {
+        const role = get().roles.find(r => r._id === roleId || r.id === roleId);
+        if (!role?.tabPermissions) return [];
+        return Object.keys(role.tabPermissions).filter(tabId => role.tabPermissions[tabId] === true);
+      },
 
       clearError: () => set({ error: null }),
       
