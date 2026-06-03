@@ -1,21 +1,59 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading, error, clearError, isAuthenticated, accessibleTabs, user, canAccessTab } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   
-  // ✅ Add this ref to prevent double submission
   const isSubmitting = useRef(false);
+
+  useEffect(() => {
+    console.log('🔍 Auth State in Login:');
+    console.log('  isAuthenticated:', isAuthenticated);
+    console.log('  accessibleTabs:', accessibleTabs);
+    console.log('  user:', user);
+    console.log('  user.roleName:', user?.roleName);
+    console.log('  canAccessTab("dashboard"):', canAccessTab('dashboard'));
+    
+    if (isAuthenticated) {
+      redirectBasedOnPermissions();
+    }
+  }, [isAuthenticated, accessibleTabs, user]);
+
+  const redirectBasedOnPermissions = () => {
+    console.log('🔄 Redirecting based on permissions...');
+    console.log('  accessibleTabs:', accessibleTabs);
+    console.log('  user.roleName:', user?.roleName);
+    
+    // Admin goes to dashboard
+    if (user?.roleName === 'Admin' || user?.roleName === 'Super Admin') {
+      console.log('  ✅ Admin user, redirecting to /dashboard');
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    
+    // For non-admin users, find first accessible tab
+    const tabOrder = ['add-driver', 'add-vehicle', 'driver-list', 'vehicle-list', 'dashboard', 'users', 'ledgers', 'settings'];
+    
+    for (const tab of tabOrder) {
+      if (accessibleTabs.includes(tab)) {
+        console.log(`  ✅ Redirecting to /${tab}`);
+        navigate(`/${tab}`, { replace: true });
+        return;
+      }
+    }
+    
+    console.log('  ❌ No accessible tabs found, redirecting to 403');
+    navigate('/403', { replace: true });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // ✅ Prevent double submission
     if (isSubmitting.current) {
       console.log('Submission already in progress');
       return;
@@ -26,11 +64,13 @@ export default function Login() {
     
     try {
       const result = await login(email, password, rememberMe);
+      console.log('Login result:', result);
       if (result.success) {
-        navigate('/dashboard');
+        console.log('Login successful, waiting for redirect...');
       }
+    } catch (err) {
+      console.error('Login error:', err);
     } finally {
-      // Reset after 2 seconds
       setTimeout(() => {
         isSubmitting.current = false;
       }, 2000);
@@ -45,6 +85,7 @@ export default function Login() {
         <div className="w-full max-w-sm">
           <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="space-y-6">
+            
               <div className="relative">
                 <input
                   type="email"

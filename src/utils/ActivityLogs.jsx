@@ -34,7 +34,7 @@ export default function ActivityLogs() {
   const { designations, fetchDesignations } = useLedgerStore();
   const { user } = useAuthStore();
   
-  const isSuperAdmin = user?.role === 'Super Admin' || user?.role === 'Admin';
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.role === 'admin' || user?.role === 'Admin';
   
   // Format functions (same as Dashboard)
   const formatLogFromDB = (dbLog) => {
@@ -164,11 +164,7 @@ export default function ActivityLogs() {
   
   // Delete single log
   const handleDeleteLog = async (logId) => {
-    if (!isSuperAdmin) {
-      alert('Only Super Admin can delete logs!');
-      return;
-    }
-    
+  
     if (confirm('Are you sure you want to delete this log entry?')) {
       setDeletingLogId(logId);
       try {
@@ -186,10 +182,7 @@ export default function ActivityLogs() {
   
   // Clear all logs
   const handleClearAllLogs = async () => {
-    if (!isSuperAdmin) {
-      alert('Only Super Admin can clear all logs!');
-      return;
-    }
+   
     
     if (confirm('⚠️ Are you sure you want to clear ALL logs? This action cannot be undone!')) {
       try {
@@ -343,15 +336,14 @@ export default function ActivityLogs() {
             <Download size={12} />
             Export
           </button>
-          {isSuperAdmin && (
            <button
                   onClick={handleClearAllLogs}
                   className="px-3 py-1.5 text-xs bg-red-50 text-red-600 border border-red-300 rounded-lg hover:bg-red-100 transition-colors"
                 >
                   <Trash size={14} className="inline mr-1" />
-                  Clear All
+                  Delete All
                 </button>
-          )}
+          
         </div>
       </div>
           </div>

@@ -1,51 +1,43 @@
+// components/Layout/Sidebar.jsx
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  UserPlus,
-  Car,
-  Users,
-  Truck,
-  UserCog,
-  Settings,
-  DatabaseSearch,
-  Menu,
-  X,
-  LogOut,
+  LayoutDashboard, UserPlus, Car, Users, Truck,
+  UserCog, Settings, DatabaseSearch, Menu, X, LogOut,
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 
-const menuItems = [
-  { path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
-  { path: '/add-driver', name: 'Add Driver', icon: UserPlus },
-  { path: '/add-vehicle', name: 'Add Vehicle', icon: Car },
-  { path: '/driver-list', name: 'Driver List', icon: Users },
-  { path: '/vehicle-list', name: 'Vehicle List', icon: Truck },
-  { path: '/users', name: 'Users', icon: UserCog },
-  { path: '/ledgers', name: 'Ledgers', icon: DatabaseSearch },
-  { path: '/settings', name: 'Settings', icon: Settings },
+// ✅ tabKey must match exactly your DB tabPermissions keys
+const ALL_MENU_ITEMS = [
+  { path: '/dashboard',    name: 'Dashboard',    icon: LayoutDashboard, tabKey: 'dashboard'    },
+  { path: '/add-driver',   name: 'Add Driver',   icon: UserPlus,        tabKey: 'add-driver'   },
+  { path: '/add-vehicle',  name: 'Add Vehicle',  icon: Car,             tabKey: 'add-vehicle'  },
+  { path: '/driver-list',  name: 'Driver List',  icon: Users,           tabKey: 'driver-list'  },
+  { path: '/vehicle-list', name: 'Vehicle List', icon: Truck,           tabKey: 'vehicle-list' },
+  { path: '/users',        name: 'Users',        icon: UserCog,         tabKey: 'users'        },
+  { path: '/ledgers',      name: 'Ledgers',      icon: DatabaseSearch,  tabKey: 'ledgers'      },
+  { path: '/settings',     name: 'Settings',     icon: Settings,        tabKey: 'settings'     },
 ];
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const { logout } = useAuthStore();
+  const { user, logout, canAccessTab } = useAuthStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // ✅ Filter menu items — only show tabs the user has access to
+  const menuItems = ALL_MENU_ITEMS.filter((item) => canAccessTab(item.tabKey));
 
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
-        setIsMobileMenuOpen(false);
-      }
+      if (window.innerWidth >= 768) setIsMobileMenuOpen(false);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleLinkClick = () => {
-    setIsMobileMenuOpen(false);
-  };
+  const handleLinkClick = () => setIsMobileMenuOpen(false);
 
   const handleLogout = () => {
     logout();
@@ -55,28 +47,42 @@ export default function Sidebar() {
 
   const SidebarContent = () => (
     <>
-      <nav className="mt-6">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={handleLinkClick}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-6 py-3 text-sm transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-blue-600'
-                }`
-              }
-            >
-              <Icon size={20} />
-              <span>{item.name}</span>
-            </NavLink>
-          );
-        })}
+      {/* ✅ Show role badge */}
+      {user?.roleName && (
+        <div className="px-6 pt-4 pb-2">
+          <span className="inline-block text-xs font-semibold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+            {user.roleName}
+          </span>
+        </div>
+      )}
+
+      <nav className="mt-2">
+        {menuItems.length === 0 ? (
+          <p className="px-6 py-4 text-sm text-gray-400">No tabs available</p>
+        ) : (
+          menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={handleLinkClick}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-6 py-3 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-blue-600'
+                  }`
+                }
+              >
+                <Icon size={20} />
+                <span>{item.name}</span>
+              </NavLink>
+            );
+          })
+        )}
       </nav>
+
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
         <button
           onClick={handleLogout}
@@ -89,7 +95,6 @@ export default function Sidebar() {
     </>
   );
 
-  // Desktop Sidebar
   if (!isMobile) {
     return (
       <>
@@ -101,7 +106,6 @@ export default function Sidebar() {
     );
   }
 
-  // Mobile Sidebar
   return (
     <>
       <button
@@ -111,17 +115,17 @@ export default function Sidebar() {
         {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      <div
-        className={`fixed top-0 left-0 h-full w-64 bg-gray-50 shadow-xl z-40 transition-transform duration-300 ${
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-       
+      <div className={`fixed top-0 left-0 h-full w-64 bg-gray-50 shadow-xl z-40 transition-transform duration-300 ${
+        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
         <SidebarContent />
       </div>
 
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 backdrop-blur-md z-30" onClick={() => setIsMobileMenuOpen(false)} />
+        <div
+          className="fixed inset-0 backdrop-blur-md z-30"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
       )}
     </>
   );
