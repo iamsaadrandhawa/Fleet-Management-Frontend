@@ -308,15 +308,7 @@ export default function Dashboard() {
                 {isLoadingLogs ? 'Loading...' : 'Refresh'}
               </button>
               
-              {isAdmin && recentLogs.length > 0 && (
-                <button
-                  onClick={handleClearAllLogs}
-                  className="px-3 py-1.5 text-sm bg-red-50 text-red-600 border border-red-300 rounded-lg hover:bg-red-100 transition-colors"
-                >
-                  <Trash size={14} className="inline mr-1" />
-                  Clear All
-                </button>
-              )}
+            
               
               <select
                 value={selectedDesignation}
@@ -343,7 +335,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <table className="w-full">
-                <thead className="bg-gray-50 border-b sticky top-0">
+                <thead className=" bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
@@ -351,7 +343,6 @@ export default function Dashboard() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entity</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                    {isAdmin && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -391,22 +382,7 @@ export default function Dashboard() {
                           {log.description || (typeof log.details === 'object' ? JSON.stringify(log.details).substring(0, 80) : log.details || 'N/A')}
                         </div>
                       </td>
-                      {isAdmin && (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => handleDeleteLog(log.id)}
-                            disabled={deletingLogId === log.id}
-                            className="text-red-600 hover:text-red-800 transition-colors disabled:opacity-50"
-                            title="Delete log"
-                          >
-                            {deletingLogId === log.id ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
-                            ) : (
-                              <Trash2 size={16} />
-                            )}
-                          </button>
-                        </td>
-                      )}
+                      
                     </tr>
                   ))}
                 </tbody>
