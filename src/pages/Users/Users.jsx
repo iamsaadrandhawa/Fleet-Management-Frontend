@@ -337,92 +337,98 @@ const handleSubmitUser = async () => {
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       {/* Search and Filter Bar */}
-      <div className="p-4">
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search by employee ID, name, email, or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 bg-white"
-            />
-          </div>
-          
+     
+<div className="bg-white rounded-lg shadow border border-gray-200">
+  <div className="p-4">
+    <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex-1 relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+        <input
+          type="text"
+          placeholder="Search by employee ID, name, email, or phone..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
+        />
+      </div>
+      
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition bg-white"
+        >
+          <Filter size={14} />
+          Filters
+          {(filters.role || filters.status) && (
+            <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5">
+              Active
+            </span>
+          )}
+        </button>
+        
+        <button
+          onClick={handleAddUser}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium rounded-lg transition flex items-center gap-2"
+        >
+          <Plus size={14} />
+          Add New User
+        </button>
+      </div>
+    </div>
+    
+    {/* Filter Panel */}
+    {showFilters && (
+      <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-medium text-gray-700">Filter by:</h3>
           <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition bg-white"
+            onClick={clearFilters}
+            className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
           >
-            <Filter size={14} />
-            Filters
-            {(filters.role || filters.status) && (
-              <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5">
-                Active
-              </span>
-            )}
-          </button>
-          
-          <button
-            onClick={handleAddUser}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-xs font-medium rounded-lg transition flex items-center gap-2"
-          >
-            <Plus size={14} />
-            Add New User
+            <X size={14} />
+            Clear all
           </button>
         </div>
-
-        {showFilters && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-[11px] font-medium text-gray-500">FILTER BY:</h3>
-              <button
-                onClick={clearFilters}
-                className="text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1"
-              >
-                <X size={12} />
-                Clear all
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Role Filter - from Ledger Store Roles */}
-              <div>
-                <label className="block text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Role</label>
-                <select
-                  value={filters.role}
-                  onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
-                >
-                  <option value="">All Roles</option>
-                  {activeRoles.map(role => (
-                    <option key={role._id} value={role.name}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Status Filter */}
-              <div>
-                <label className="block text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Status</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
-                >
-                  <option value="">All Status</option>
-                  {statuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Role Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Role</label>
+            <select
+              value={filters.role}
+              onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">All Roles</option>
+              {activeRoles.map(role => (
+                <option key={role._id} value={role.name}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">All Status</option>
+              {statuses.map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
+    )}
+  </div>
+</div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">

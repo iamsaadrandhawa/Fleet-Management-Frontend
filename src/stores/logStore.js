@@ -514,7 +514,7 @@ const useLogStore = create(
       set({ isLoading: true, error: null });
       
       try {
-        const response = await api.delete('/audit-logs/all');
+        const response = await api.delete('/audit-logs/');
         
         set({ 
           logs: [], 

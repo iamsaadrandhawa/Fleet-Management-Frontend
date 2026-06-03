@@ -7,6 +7,7 @@ import useUserStore from '../../stores/userStore';
 import useLedgerStore from '../../stores/ledgerStore';
 import useLogStore from '../../stores/logStore';
 
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [selectedDesignation, setSelectedDesignation] = useState('all');
@@ -140,6 +141,7 @@ export default function Dashboard() {
   // Navigate to activity logs page
   const handleViewAllLogs = () => {
     navigate('/activity-logs');
+    
   };
 
   // Format database log
@@ -429,6 +431,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+    
     </div>
   );
 }

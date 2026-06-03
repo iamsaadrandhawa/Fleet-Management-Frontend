@@ -106,7 +106,7 @@ export default function AddVehicle() {
     });
   }, [drivers]);
 
-  const statuses = useMemo(() => ['active', 'inactive', 'in maintenance', 'out of service'], []);
+  const statuses = useMemo(() => ['active', 'inactive'], []);
 
   // Generate vehicle ID
   const generateVehicleId = useCallback(() => {
@@ -354,210 +354,257 @@ export default function AddVehicle() {
         </div>
 
         {/* Basic Information Section */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
-            <Car size={20} className="text-blue-600" />
-            Basic Information
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle ID</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="vehicleId"
-                  value={formData.vehicleId}
-                  onChange={handleChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="VH-001 (Auto-generated if empty)"
-                />
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, vehicleId: generateVehicleId() }))}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
-                >
-                  Generate
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Registration Number <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                name="registrationNumber"
-                value={formData.registrationNumber}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="ABC-123"
-              />
-              {errors.registrationNumber && <p className="text-red-500 text-xs mt-1">{errors.registrationNumber}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Make <span className="text-red-500">*</span></label>
-              <select
-                name="make"
-                value={formData.make}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.make ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select Make</option>
-                {activeMakes.map(m => (
-                  <option key={m._id || m.id} value={m.name}>{m.name}</option>
-                ))}
-              </select>
-              {errors.make && <p className="text-red-500 text-xs mt-1">{errors.make}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Model <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                name="model"
-                value={formData.model}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.model ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Camry"
-              />
-              {errors.model && <p className="text-red-500 text-xs mt-1">{errors.model}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Year <span className="text-red-500">*</span></label>
-              <input
-                type="number"
-                name="year"
-                value={formData.year}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.year ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="2023"
-              />
-              {errors.year && <p className="text-red-500 text-xs mt-1">{errors.year}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
-              <input
-                type="text"
-                name="color"
-                value={formData.color}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="White"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Type <span className="text-red-500">*</span></label>
-              <select
-                name="fuelType"
-                value={formData.fuelType}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.fuelType ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select Fuel Type</option>
-                {activeFuelTypes.map(fuel => (
-                  <option key={fuel._id || fuel.id} value={fuel.name}>{fuel.name}</option>
-                ))}
-              </select>
-              {errors.fuelType && <p className="text-red-500 text-xs mt-1">{errors.fuelType}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Transmission</label>
-              <select
-                name="transmission"
-                value={formData.transmission}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-              >
-                <option value="">Select Transmission</option>
-                {activeTransmissions.map(trans => (
-                  <option key={trans._id || trans.id} value={trans.name}>{trans.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Seating Capacity</label>
-              <input
-                type="number"
-                name="seatingCapacity"
-                value={formData.seatingCapacity}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="4"
-                min="1"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Category <span className="text-red-500">*</span></label>
-              <select
-                name="vehicleCategory"
-                value={formData.vehicleCategory}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.vehicleCategory ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select Category</option>
-                {activeVehicleCategories.map(cat => (
-                  <option key={cat._id || cat.id} value={cat.name}>{cat.name}</option>
-                ))}
-              </select>
-              {errors.vehicleCategory && <p className="text-red-500 text-xs mt-1">{errors.vehicleCategory}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Meter Reading (km/miles) <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <Gauge size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="number"
-                  name="meterReading"
-                  value={formData.meterReading}
-                  onChange={handleChange}
-                  className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                    errors.meterReading ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="0"
-                  min="0"
-                  step="1"
-                />
-              </div>
-              {errors.meterReading && <p className="text-red-500 text-xs mt-1">{errors.meterReading}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-              >
-                {statuses.map(status => (
-                  <option key={status} value={status}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+  <div className="px-3 py-2 sm:px-6 sm:py-4 bg-gray-50 border-b border-gray-200">
+    <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+      <Car size={16} className="text-blue-600" />
+      Basic Information
+    </h2>
+  </div>
+  
+  <div className="p-3 sm:p-6">
+    <div className="space-y-3">
+      {/* Vehicle ID */}
+      <div>
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+          Vehicle ID
+        </label>
+        <div className="flex flex-col sm:flex-row gap-1.5">
+          <input
+            type="text"
+            name="vehicleId"
+            value={formData.vehicleId}
+            onChange={handleChange}
+            className="flex-1 px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            placeholder="VH-001"
+          />
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, vehicleId: generateVehicleId() }))}
+            className="px-2 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-xs sm:text-sm w-full sm:w-auto"
+          >
+            Generate
+          </button>
         </div>
+      </div>
+
+      {/* Registration & Make */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Reg. Number <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="registrationNumber"
+            value={formData.registrationNumber}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+              errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="ABC-123"
+          />
+          {errors.registrationNumber && <p className="text-red-500 text-[10px] mt-0.5">{errors.registrationNumber}</p>}
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Make <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="make"
+            value={formData.make}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+              errors.make ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Select</option>
+            {activeMakes.slice(0, 10).map(m => (
+              <option key={m._id || m.id} value={m.name}>{m.name}</option>
+            ))}
+          </select>
+          {errors.make && <p className="text-red-500 text-[10px] mt-0.5">{errors.make}</p>}
+        </div>
+      </div>
+
+      {/* Model & Year */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Model <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="model"
+            value={formData.model}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+              errors.model ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="Camry"
+          />
+          {errors.model && <p className="text-red-500 text-[10px] mt-0.5">{errors.model}</p>}
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Year <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            name="year"
+            value={formData.year}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+              errors.year ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="2023"
+          />
+          {errors.year && <p className="text-red-500 text-[10px] mt-0.5">{errors.year}</p>}
+        </div>
+      </div>
+
+      {/* Color & Fuel Type */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Color
+          </label>
+          <input
+            type="text"
+            name="color"
+            value={formData.color}
+            onChange={handleChange}
+            className="w-full px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            placeholder="White"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Fuel Type <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="fuelType"
+            value={formData.fuelType}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+              errors.fuelType ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Select</option>
+            {activeFuelTypes.map(fuel => (
+              <option key={fuel._id || fuel.id} value={fuel.name}>{fuel.name}</option>
+            ))}
+          </select>
+          {errors.fuelType && <p className="text-red-500 text-[10px] mt-0.5">{errors.fuelType}</p>}
+        </div>
+      </div>
+
+      {/* Transmission & Capacity */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Transmission
+          </label>
+          <select
+            name="transmission"
+            value={formData.transmission}
+            onChange={handleChange}
+            className="w-full px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Select</option>
+            {activeTransmissions.map(trans => (
+              <option key={trans._id || trans.id} value={trans.name}>{trans.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Seats
+          </label>
+          <input
+            type="number"
+            name="seatingCapacity"
+            value={formData.seatingCapacity}
+            onChange={handleChange}
+            className="w-full px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            placeholder="4"
+            min="1"
+          />
+        </div>
+      </div>
+
+      {/* Category & Meter Reading */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Category <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="vehicleCategory"
+            value={formData.vehicleCategory}
+            onChange={handleChange}
+            className={`w-full px-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+              errors.vehicleCategory ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Select</option>
+            {activeVehicleCategories.map(cat => (
+              <option key={cat._id || cat.id} value={cat.name}>{cat.name}</option>
+            ))}
+          </select>
+          {errors.vehicleCategory && <p className="text-red-500 text-[10px] mt-0.5">{errors.vehicleCategory}</p>}
+        </div>
+
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+            Meter (km/miles) <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <svg className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4l3 3"/>
+            </svg>
+            <input
+              type="number"
+              name="meterReading"
+              value={formData.meterReading}
+              onChange={handleChange}
+              className={`w-full pl-7 pr-2 py-1.5 text-xs sm:text-sm border rounded-lg focus:outline-none focus:border-blue-500 ${
+                errors.meterReading ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="0"
+              min="0"
+            />
+          </div>
+          {errors.meterReading && <p className="text-red-500 text-[10px] mt-0.5">{errors.meterReading}</p>}
+        </div>
+      </div>
+
+      {/* Status */}
+      <div>
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5">
+          Status
+        </label>
+        <select
+          name="status"
+          value={formData.status}
+          onChange={handleChange}
+          className="w-full px-2 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+        >
+          {statuses.map(status => (
+            <option key={status} value={status}>
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Registration & Documents Section */}
         <div className="bg-white rounded-lg shadow p-6">

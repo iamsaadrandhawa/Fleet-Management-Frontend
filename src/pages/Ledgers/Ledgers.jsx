@@ -337,75 +337,81 @@ export default function Ledgers() {
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       {/* Search and Filter Bar */}
-      <div className="p-4">
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search by name, code or description..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 bg-white"
-            />
-          </div>
+     
 
-          {currentTabConfig?.showStatus && (
+<div className="bg-white rounded-lg shadow border border-gray-200">
+  <div className="p-4">
+    <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex-1 relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+        <input
+          type="text"
+          placeholder="Search by name, code or description..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
+        />
+      </div>
+      
+      <div className="flex gap-2">
+        {currentTabConfig?.showStatus && (
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition bg-white"
+          >
+            <Filter size={14} />
+            Filters
+            {filterStatus && (
+              <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5">
+                Active
+              </span>
+            )}
+          </button>
+        )}
+        
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
+        >
+          <Plus size={14} />
+          Add New {currentTabConfig?.name?.slice(0, -1) || 'Item'}
+        </button>
+      </div>
+    </div>
+    
+    {/* Filter Panel */}
+    {showFilters && currentTabConfig?.showStatus && (
+      <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-medium text-gray-700">Filter by:</h3>
+          {filterStatus && (
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition bg-white"
+              onClick={clearFilters}
+              className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
             >
-              <Filter size={14} />
-              Filters
-              {filterStatus && (
-                <span className="bg-blue-600 text-white text-[10px] rounded-full px-1.5 py-0.5">
-                  1
-                </span>
-              )}
+              <X size={14} />
+              Clear all
             </button>
           )}
-
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition"
-          >
-            <Plus size={14} />
-            Add New {currentTabConfig?.name.slice(0, -1)}
-          </button>
         </div>
-
-        {/* Filter Panel */}
-        {showFilters && currentTabConfig?.showStatus && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-[11px] font-medium text-gray-500">FILTER BY:</h3>
-              {filterStatus && (
-                <button
-                  onClick={clearFilters}
-                  className="text-[11px] text-red-500 hover:text-red-600 flex items-center gap-1"
-                >
-                  <X size={12} />
-                  Clear
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Status</label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
-                >
-                  <option value="">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
-        )}
+        </div>
       </div>
+    )}
+  </div>
+</div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 overflow-x-auto px-4">
@@ -432,7 +438,7 @@ export default function Ledgers() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto relative min-h-[200px]">
           {tableLoading && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex items-center justify-center">

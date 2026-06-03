@@ -346,189 +346,197 @@ export default function AddDriver() {
         </div>
 
         {/* Basic Information Section */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
-            <User size={20} className="text-blue-600" />
-            Basic Information
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Employee ID */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Employee ID
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="employeeId"
-                  value={formData.employeeId}
-                  onChange={handleChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  placeholder="EMP-001 (Auto-generated if empty)"
-                />
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, employeeId: generateEmployeeId() }))}
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
-                >
-                  Generate
-                </button>
-              </div>
-            </div>
-
-            {/* First Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                First Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.firstName ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="John"
-              />
-              {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
-            </div>
-
-            {/* Last Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Last Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.lastName ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Doe"
-              />
-              {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
-            </div>
-
-            {/* CNIC */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                CNIC <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="cnic"
-                value={formData.cnic}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.cnic ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="12345-1234567-1"
-              />
-              {errors.cnic && <p className="text-red-500 text-xs mt-1">{errors.cnic}</p>}
-            </div>
-
-            {/* Phone Number */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone Number <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="tel"
-                name="phoneNumber"
-                value={formData.phoneNumber}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="+92 300 1234567"
-              />
-              {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>}
-            </div>
-
-            {/* Department */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Department <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.department ? 'border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Transport / Logistics / Fleet"
-              />
-              {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
-            </div>
-
-            {/* Designation */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Designation <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="designation"
-                value={formData.designation}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.designation ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select Designation</option>
-                {activeDesignations.map(des => (
-                  <option key={des._id || des.id} value={des._id || des.id}>
-                    {des.name}
-                  </option>
-                ))}
-              </select>
-              {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation}</p>}
-            </div>
-
-            {/* Location */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Location <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 ${
-                  errors.location ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Select Location</option>
-                {activeLocations.map(loc => (
-                  <option key={loc._id || loc.id} value={loc._id || loc.id}>
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
-              {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
-            </div>
-
-            {/* Joining Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Joining Date
-              </label>
-              <input
-                type="date"
-                name="joiningDate"
-                value={formData.joiningDate}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Leave empty to use current date</p>
-            </div>
-          </div>
+       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+  <div className="px-4 py-3 sm:px-6 sm:py-4 bg-gray-50 border-b border-gray-200">
+    <h2 className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-2">
+      <User size={18} className="text-blue-600" />
+      Basic Information
+    </h2>
+  </div>
+  
+  <div className="p-4 sm:p-6">
+    <div className="space-y-4">
+      {/* Employee ID - Full width with generate button below on mobile */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Employee ID
+        </label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            name="employeeId"
+            value={formData.employeeId}
+            onChange={handleChange}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
+            placeholder="EMP-001 (Auto-generated if empty)"
+          />
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, employeeId: generateEmployeeId() }))}
+            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm w-full sm:w-auto"
+          >
+            Generate
+          </button>
         </div>
+      </div>
+
+      {/* First Name & Last Name - Stack on mobile, side by side on tablet+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            First Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.firstName ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="John"
+          />
+          {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Last Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="lastName"
+            value={formData.lastName}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.lastName ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="Doe"
+          />
+          {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
+        </div>
+      </div>
+
+      {/* CNIC & Phone Number */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            CNIC <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="cnic"
+            value={formData.cnic}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.cnic ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="12345-1234567-1"
+          />
+          {errors.cnic && <p className="text-red-500 text-xs mt-1">{errors.cnic}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Phone Number <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="tel"
+            name="phoneNumber"
+            value={formData.phoneNumber}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.phoneNumber ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="+92 300 1234567"
+          />
+          {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>}
+        </div>
+      </div>
+
+      {/* Department & Designation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Department <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="department"
+            value={formData.department}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.department ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="Transport / Logistics"
+          />
+          {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Designation <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="designation"
+            value={formData.designation}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.designation ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Select Designation</option>
+            {activeDesignations.map(des => (
+              <option key={des._id || des.id} value={des._id || des.id}>
+                {des.name}
+              </option>
+            ))}
+          </select>
+          {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation}</p>}
+        </div>
+      </div>
+
+      {/* Location & Joining Date */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Location <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="location"
+            value={formData.location}
+            onChange={handleChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm ${
+              errors.location ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">Select Location</option>
+            {activeLocations.map(loc => (
+              <option key={loc._id || loc.id} value={loc._id || loc.id}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+          {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Joining Date
+          </label>
+          <input
+            type="date"
+            name="joiningDate"
+            value={formData.joiningDate}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
+          />
+          <p className="text-xs text-gray-500 mt-1">Leave empty for current date</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* License Information Section */}
         <div className="bg-white rounded-lg shadow p-6">
