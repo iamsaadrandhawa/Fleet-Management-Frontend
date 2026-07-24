@@ -1,158 +1,310 @@
 // services/api.js
-import axios from 'axios';
+import { supabase } from './supabaseClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// ------------------------------------------------------------------
+// Small helper so every function has the same success/error shape
+// your old axios interceptor gave you: resolve with data, throw
+// a { message } object on failure.
+// ------------------------------------------------------------------
+function unwrap({ data, error }) {
+  if (error) throw { message: error.message, details: error };
+  return data;
+}
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true', // Bypass ngrok warning
-  },
-  withCredentials: true, // Important for credentials: true
-});
-
-// Request interceptor to add token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      sessionStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error.response?.data || { message: error.message });
-  }
-);
-
-// Auth APIs
+// ==================== AUTH ====================
 export const authAPI = {
-  login: (credentials) => api.post('/auth/login', credentials),
-  logout: () => api.post('/auth/logout'),
-  getProfile: () => api.get('/auth/profile'),
-  changePassword: (data) => api.post('/auth/change-password', data),
+  login: async ({ email, password }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw { message: error.message };
+
+    // pull profile + role in the same shape your old /auth/login gave you
+    const profile = await authAPI.getProfile();
+    return { session: data.session, user: data.user, profile };
+  },
+
+  logout: async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw { message: error.message };
+    return { success: true };
+  },
+
+  getProfile: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*, role:roles(*)')   // populates the role object, like your old populate() call
+      .eq('id', user.id)
+      .single();
+
+    return unwrap({ data, error });
+  },
+
+  changePassword: async ({ newPassword }) => {
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+    return unwrap({ data, error });
+  },
+
+  // Handy for your Zustand auth store to subscribe to session changes
+  onAuthStateChange: (callback) => supabase.auth.onAuthStateChange(callback),
 };
 
-// Driver APIs
+// ==================== DRIVERS ====================
 export const driverAPI = {
-  getAll: (params) => api.get('/drivers', { params }), // Add params support
-  getById: (id) => api.get(`/drivers/${id}`),
-  create: (data) => api.post('/drivers', data),
-  update: (id, data) => api.put(`/drivers/${id}`, data),
-  delete: (id) => api.delete(`/drivers/${id}`),
-  updateStatus: (id, status) => api.patch(`/drivers/${id}/status`, { status }),
-  getByStatus: (status) => api.get(`/drivers/status/${status}`),
+  getAll: async (params = {}) => {
+    let query = supabase.from('drivers').select('*').order('created_at', { ascending: false });
+    if (params.status) query = query.eq('status', params.status);
+    if (params.search) query = query.ilike('name', `%${params.search}%`);
+    return unwrap(await query);
+  },
+
+  getById: async (id) => unwrap(await supabase.from('drivers').select('*').eq('id', id).single()),
+
+  create: async (data) => unwrap(await supabase.from('drivers').insert(data).select().single()),
+
+  update: async (id, data) =>
+    unwrap(await supabase.from('drivers').update(data).eq('id', id).select().single()),
+
+  delete: async (id) => unwrap(await supabase.from('drivers').delete().eq('id', id)),
+
+  updateStatus: async (id, status) =>
+    unwrap(await supabase.from('drivers').update({ status }).eq('id', id).select().single()),
+
+  getByStatus: async (status) => unwrap(await supabase.from('drivers').select('*').eq('status', status)),
 };
 
-// Vehicle APIs
+// ==================== VEHICLES ====================
 export const vehicleAPI = {
-  getAll: () => api.get('/vehicles'),
-  getById: (id) => api.get(`/vehicles/${id}`),
-  create: (data) => api.post('/vehicles', data),
-  update: (id, data) => api.put(`/vehicles/${id}`, data),
-  delete: (id) => api.delete(`/vehicles/${id}`),
-  
-  // Add these new methods
-  assignToDriver: (id, data) => api.put(`/vehicles/${id}/assign`, data),
-  unassignFromDriver: (id) => api.put(`/vehicles/${id}/unassign`),
-  getByStatus: (status) => api.get(`/vehicles/status/${status}`),
-  getAvailable: () => api.get('/vehicles/available'),
+  getAll: async () => unwrap(await supabase.from('vehicles').select('*').order('created_at', { ascending: false })),
+
+  getById: async (id) => unwrap(await supabase.from('vehicles').select('*').eq('id', id).single()),
+
+  create: async (data) => unwrap(await supabase.from('vehicles').insert(data).select().single()),
+
+  update: async (id, data) =>
+    unwrap(await supabase.from('vehicles').update(data).eq('id', id).select().single()),
+
+  delete: async (id) => unwrap(await supabase.from('vehicles').delete().eq('id', id)),
+
+  assignToDriver: async (id, { driverId }) =>
+    unwrap(
+      await supabase
+        .from('vehicles')
+        .update({ assigned_driver_id: driverId, status: 'assigned' })
+        .eq('id', id)
+        .select()
+        .single()
+    ),
+
+  unassignFromDriver: async (id) =>
+    unwrap(
+      await supabase
+        .from('vehicles')
+        .update({ assigned_driver_id: null, status: 'available' })
+        .eq('id', id)
+        .select()
+        .single()
+    ),
+
+  getByStatus: async (status) => unwrap(await supabase.from('vehicles').select('*').eq('status', status)),
+
+  getAvailable: async () => unwrap(await supabase.from('vehicles').select('*').eq('status', 'available')),
 };
 
-// User APIs
+// ==================== USERS ====================
 export const userAPI = {
-  getAll: (params) => api.get('/users', { params }),
-  getById: (id) => api.get(`/users/${id}`),
-  create: (data) => api.post('/users', data),
-  update: (id, data) => api.put(`/users/${id}`, data),
-   delete: (id) => {
-        console.log('Soft delete (deactivate) user:', id);
-        return api.delete(`/users/${id}`);
-    },
-    
-    // Hard delete (permanent removal)
-    hardDelete: (id) => {
-        console.log('Hard delete (permanent) user:', id);
-        return api.delete(`/users/${id}/hard`);
-    },    
-  getByEmail: (email) => api.get(`/users/email/${email}`),
-  getByRole: (role) => api.get(`/users/role/${role}`),
-  getStats: () => api.get('/users/stats'),
-  bulkUpdateStatus: (data) => api.patch('/users/bulk-status', data),
+  getAll: async (params = {}) => {
+    let query = supabase.from('profiles').select('*, role:roles(*)').order('created_at', { ascending: false });
+    if (params.status) query = query.eq('status', params.status);
+    return unwrap(await query);
+  },
+
+  getById: async (id) =>
+    unwrap(await supabase.from('profiles').select('*, role:roles(*)').eq('id', id).single()),
+
+  // Creating a user = Supabase Auth admin call. This needs the SERVICE ROLE key,
+  // so it must run in an Edge Function / server context — not directly from the browser.
+  // See the "create-user" edge function note at the bottom of this file.
+  create: async (data) => {
+    const { data: result, error } = await supabase.functions.invoke('create-user', { body: data });
+    if (error) throw { message: error.message };
+    return result;
+  },
+
+  update: async (id, data) =>
+    unwrap(await supabase.from('profiles').update(data).eq('id', id).select().single()),
+
+  delete: async (id) =>
+    // soft delete: deactivate
+    unwrap(await supabase.from('profiles').update({ status: 'inactive' }).eq('id', id).select().single()),
+
+  hardDelete: async (id) => {
+    const { data, error } = await supabase.functions.invoke('delete-user', { body: { id } });
+    if (error) throw { message: error.message };
+    return data;
+  },
+
+  getByEmail: async (email) => unwrap(await supabase.from('profiles').select('*').eq('email', email).single()),
+
+  getByRole: async (roleId) => unwrap(await supabase.from('profiles').select('*').eq('role_id', roleId)),
+
+  getStats: async () => {
+    const { count: total } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+    const { count: active } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active');
+    return { total, active, inactive: total - active };
+  },
+
+  bulkUpdateStatus: async ({ ids, status }) =>
+    unwrap(await supabase.from('profiles').update({ status }).in('id', ids).select()),
 };
 
-// Ledger APIs (Updated with Roles)
+// ==================== LEDGERS ====================
+function makeLedgerAPI(table) {
+  return {
+    getAll: async () => unwrap(await supabase.from(table).select('*').order('name')),
+    add: async (data) => unwrap(await supabase.from(table).insert(data).select().single()),
+    update: async (id, data) => unwrap(await supabase.from(table).update(data).eq('id', id).select().single()),
+    delete: async (id) => unwrap(await supabase.from(table).delete().eq('id', id)),
+  };
+}
+
+const rolesLedger = makeLedgerAPI('roles');
+const designationsLedger = makeLedgerAPI('designations');
+const locationsLedger = makeLedgerAPI('locations');
+const makesLedger = makeLedgerAPI('makes');
+const categoriesLedger = makeLedgerAPI('vehicle_categories');
+const fuelTypesLedger = makeLedgerAPI('fuel_types');
+const transmissionsLedger = makeLedgerAPI('transmissions');
+
 export const ledgerAPI = {
-  // Get all ledgers grouped
-  getAll: () => api.get('/ledgers/all'),
+  getAll: async () => {
+    const [roles, designations, locations, makes, vehicleCategories, fuelTypes, transmissions] = await Promise.all([
+      rolesLedger.getAll(),
+      designationsLedger.getAll(),
+      locationsLedger.getAll(),
+      makesLedger.getAll(),
+      categoriesLedger.getAll(),
+      fuelTypesLedger.getAll(),
+      transmissionsLedger.getAll(),
+    ]);
+    return { roles, designations, locations, makes, vehicleCategories, fuelTypes, transmissions };
+  },
 
-  // Get by type
-  getByType: (type) => api.get(`/ledgers/type/${type}`),
+  getByType: async (type) => {
+    const map = {
+      roles: rolesLedger,
+      designations: designationsLedger,
+      locations: locationsLedger,
+      makes: makesLedger,
+      'vehicle-categories': categoriesLedger,
+      'fuel-types': fuelTypesLedger,
+      transmissions: transmissionsLedger,
+    };
+    if (!map[type]) throw { message: `Unknown ledger type: ${type}` };
+    return map[type].getAll();
+  },
 
-  // ==================== ROLES ====================
-  getRoles: () => api.get('/ledgers/roles'),
-  addRole: (data) => api.post('/ledgers/roles', data),
-  updateRole: (id, data) => api.put(`/ledgers/roles/${id}`, data),
-  deleteRole: (id) => api.delete(`/ledgers/roles/${id}`),
+  // ROLES
+  getRoles: rolesLedger.getAll,
+  addRole: rolesLedger.add,
+  updateRole: rolesLedger.update,
+  deleteRole: rolesLedger.delete,
 
-  // ==================== DESIGNATIONS ====================
-  getDesignations: () => api.get('/ledgers/designations'),
-  addDesignation: (data) => api.post('/ledgers/designations', data),
-  updateDesignation: (id, data) => api.put(`/ledgers/designations/${id}`, data),
-  deleteDesignation: (id) => api.delete(`/ledgers/designations/${id}`),
+  // DESIGNATIONS
+  getDesignations: designationsLedger.getAll,
+  addDesignation: designationsLedger.add,
+  updateDesignation: designationsLedger.update,
+  deleteDesignation: designationsLedger.delete,
 
-  // ==================== LOCATIONS ====================
-  getLocations: () => api.get('/ledgers/locations'),
-  addLocation: (data) => api.post('/ledgers/locations', data),
-  updateLocation: (id, data) => api.put(`/ledgers/locations/${id}`, data),
-  deleteLocation: (id) => api.delete(`/ledgers/locations/${id}`),
+  // LOCATIONS
+  getLocations: locationsLedger.getAll,
+  addLocation: locationsLedger.add,
+  updateLocation: locationsLedger.update,
+  deleteLocation: locationsLedger.delete,
 
-  // ==================== MAKES ====================
-  getMakes: () => api.get('/ledgers/makes'),
-  addMake: (data) => api.post('/ledgers/makes', data),
-  updateMake: (id, data) => api.put(`/ledgers/makes/${id}`, data),
-  deleteMake: (id) => api.delete(`/ledgers/makes/${id}`),
+  // MAKES
+  getMakes: makesLedger.getAll,
+  addMake: makesLedger.add,
+  updateMake: makesLedger.update,
+  deleteMake: makesLedger.delete,
 
-  // ==================== VEHICLE CATEGORIES ====================
-  getVehicleCategories: () => api.get('/ledgers/vehicle-categories'),
-  addVehicleCategory: (data) => api.post('/ledgers/vehicle-categories', data),
-  updateVehicleCategory: (id, data) => api.put(`/ledgers/vehicle-categories/${id}`, data),
-  deleteVehicleCategory: (id) => api.delete(`/ledgers/vehicle-categories/${id}`),
+  // VEHICLE CATEGORIES
+  getVehicleCategories: categoriesLedger.getAll,
+  addVehicleCategory: categoriesLedger.add,
+  updateVehicleCategory: categoriesLedger.update,
+  deleteVehicleCategory: categoriesLedger.delete,
 
-  // ==================== FUEL TYPES ====================
-  getFuelTypes: () => api.get('/ledgers/fuel-types'),
-  addFuelType: (data) => api.post('/ledgers/fuel-types', data),
-  updateFuelType: (id, data) => api.put(`/ledgers/fuel-types/${id}`, data),
-  deleteFuelType: (id) => api.delete(`/ledgers/fuel-types/${id}`),
+  // FUEL TYPES
+  getFuelTypes: fuelTypesLedger.getAll,
+  addFuelType: fuelTypesLedger.add,
+  updateFuelType: fuelTypesLedger.update,
+  deleteFuelType: fuelTypesLedger.delete,
 
-  // ==================== TRANSMISSIONS ====================
-  getTransmissions: () => api.get('/ledgers/transmissions'),
-  addTransmission: (data) => api.post('/ledgers/transmissions', data),
-  updateTransmission: (id, data) => api.put(`/ledgers/transmissions/${id}`, data),
-  deleteTransmission: (id) => api.delete(`/ledgers/transmissions/${id}`),
+  // TRANSMISSIONS
+  getTransmissions: transmissionsLedger.getAll,
+  addTransmission: transmissionsLedger.add,
+  updateTransmission: transmissionsLedger.update,
+  deleteTransmission: transmissionsLedger.delete,
 };
 
-// Log APIs
+// ==================== AUDIT / ACTIVITY LOGS ====================
 export const logAPI = {
-  getAll: () => api.get('/audit-logs'),
-  getRecent: (limit) => api.get(`/audit-logs/recent?limit=${limit}`),
-  getByUser: (userId) => api.get(`/audit-logs/user/${userId}`),
-  getByAction: (action) => api.get(`/audit-logs/action/${action}`),
-  getByEntity: (entityType) => api.get(`/audit-logs/entity/${entityType}`),
-  delete: (id) => api.delete(`/audit-logs/${id}`),
-  clearAll: () => api.delete('/audit-logs'),
+  getAll: async () => unwrap(await supabase.from('audit_logs').select('*').order('created_at', { ascending: false })),
+
+  getRecent: async (limit = 20) =>
+    unwrap(await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(limit)),
+
+  getByUser: async (userId) =>
+    unwrap(await supabase.from('audit_logs').select('*').eq('user_id', userId).order('created_at', { ascending: false })),
+
+  getByAction: async (action) =>
+    unwrap(await supabase.from('audit_logs').select('*').eq('action', action).order('created_at', { ascending: false })),
+
+  getByEntity: async (entityType) =>
+    unwrap(await supabase.from('audit_logs').select('*').eq('entity_type', entityType).order('created_at', { ascending: false })),
+
+  delete: async (id) => unwrap(await supabase.from('audit_logs').delete().eq('id', id)),
+
+  clearAll: async () => unwrap(await supabase.from('audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000')),
+
+  // New helper — call this from wherever you currently fire audit events
+  log: async ({ action, entityType, entityId, details }) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const profile = user ? await authAPI.getProfile() : null;
+    return unwrap(
+      await supabase.from('audit_logs').insert({
+        user_id: user?.id ?? null,
+        user_role: profile?.role?.name ?? null,
+        action,
+        entity_type: entityType,
+        entity_id: entityId,
+        details,
+      })
+    );
+  },
 };
 
-export default api;
+export default supabase;
+
+/*
+  ------------------------------------------------------------------
+  NOTES
+  ------------------------------------------------------------------
+  1. userAPI.create / userAPI.hardDelete call Supabase Edge Functions
+     ("create-user", "delete-user") because creating/deleting auth
+     users requires the SERVICE ROLE key, which must never be exposed
+     in frontend code. I can scaffold those two edge functions next
+     if you want — they're short (~20 lines each).
+
+  2. Your Zustand stores that import from authAPI / driverAPI / etc.
+     do NOT need to change — same function names, same call signatures,
+     same return shapes (data or thrown { message }).
+
+  3. Remove the localStorage/sessionStorage token logic from your auth
+     store — Supabase Auth manages the session/token for you, and
+     supabase-js automatically attaches it to every request.
+*/
