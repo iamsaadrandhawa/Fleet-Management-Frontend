@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const AVAILABLE_TABS = [
   { id: 'dashboard', name: 'Dashboard', path: '/dashboard' },
@@ -41,6 +41,27 @@ export default function LedgerFormModal({
   const [errors, setErrors] = useState({});
   const isRoleTab = tabId === 'roles';
 
+  // ✅ Super Admin detection — placed INSIDE the component, after state declarations
+  const isSuperAdmin = isRoleTab && name.trim().toLowerCase() === 'super admin';
+
+  // ✅ Auto-grant full permissions when the role name is "Super Admin"
+  useEffect(() => {
+    if (isSuperAdmin) {
+      setCanCreate(true);
+      setCanRead(true);
+      setCanUpdate(true);
+      setCanDelete(true);
+      setTabDashboard(true);
+      setTabAddDriver(true);
+      setTabAddVehicle(true);
+      setTabDriverList(true);
+      setTabVehicleList(true);
+      setTabUsers(true);
+      setTabLedgers(true);
+      setTabSettings(true);
+    }
+  }, [isSuperAdmin]);
+
   const validateForm = () => {
     const newErrors = {};
     if (!name.trim()) newErrors.name = 'Name is required';
@@ -81,6 +102,7 @@ export default function LedgerFormModal({
   };
 
   const handleSelectAllTabs = () => {
+    if (isSuperAdmin) return; // locked
     const allSelected = tabDashboard && tabAddDriver && tabAddVehicle && tabDriverList && 
                         tabVehicleList && tabUsers && tabLedgers && tabSettings;
     const newValue = !allSelected;
@@ -95,6 +117,7 @@ export default function LedgerFormModal({
   };
 
   const handleSelectAllCRUD = () => {
+    if (isSuperAdmin) return; // locked
     const allSelected = canCreate && canRead && canUpdate && canDelete;
     const newValue = !allSelected;
     setCanCreate(newValue);
@@ -130,6 +153,11 @@ export default function LedgerFormModal({
                 placeholder="Enter role name"
               />
               {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+              {isSuperAdmin && (
+                <p className="text-xs text-blue-600 mt-1">
+                  ⚡ Super Admin role — full access is granted automatically and can't be changed here.
+                </p>
+              )}
             </div>
             
             {/* Code Field */}
@@ -159,7 +187,8 @@ export default function LedgerFormModal({
                     <button
                       type="button"
                       onClick={handleSelectAllCRUD}
-                      className="text-xs text-blue-600 hover:text-blue-700"
+                      disabled={isSuperAdmin}
+                      className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {canCreate && canRead && canUpdate && canDelete ? 'Deselect All' : 'Select All'}
                     </button>
@@ -169,8 +198,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={canCreate}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setCanCreate(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Create</span>
                       <span className="text-xs text-gray-500 ml-auto">Can create new records</span>
@@ -180,8 +210,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={canRead}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setCanRead(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Read (View)</span>
                       <span className="text-xs text-gray-500 ml-auto">Can view records</span>
@@ -191,8 +222,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={canUpdate}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setCanUpdate(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Update</span>
                       <span className="text-xs text-gray-500 ml-auto">Can edit records</span>
@@ -202,8 +234,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={canDelete}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setCanDelete(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Delete</span>
                       <span className="text-xs text-gray-500 ml-auto">Can delete records</span>
@@ -220,7 +253,8 @@ export default function LedgerFormModal({
                     <button
                       type="button"
                       onClick={handleSelectAllTabs}
-                      className="text-xs text-blue-600 hover:text-blue-700"
+                      disabled={isSuperAdmin}
+                      className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {tabDashboard && tabAddDriver && tabAddVehicle && tabDriverList && 
                        tabVehicleList && tabUsers && tabLedgers && tabSettings ? 'Deselect All' : 'Select All'}
@@ -231,8 +265,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabDashboard}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabDashboard(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Dashboard</span>
                       <span className="text-xs text-gray-500 ml-auto">/dashboard</span>
@@ -242,8 +277,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabAddDriver}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabAddDriver(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Add Driver</span>
                       <span className="text-xs text-gray-500 ml-auto">/add-driver</span>
@@ -253,8 +289,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabAddVehicle}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabAddVehicle(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Add Vehicle</span>
                       <span className="text-xs text-gray-500 ml-auto">/add-vehicle</span>
@@ -264,8 +301,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabDriverList}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabDriverList(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Driver List</span>
                       <span className="text-xs text-gray-500 ml-auto">/driver-list</span>
@@ -275,8 +313,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabVehicleList}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabVehicleList(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Vehicle List</span>
                       <span className="text-xs text-gray-500 ml-auto">/vehicle-list</span>
@@ -286,8 +325,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabUsers}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabUsers(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Users</span>
                       <span className="text-xs text-gray-500 ml-auto">/users</span>
@@ -297,8 +337,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabLedgers}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabLedgers(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Ledgers</span>
                       <span className="text-xs text-gray-500 ml-auto">/ledgers</span>
@@ -308,8 +349,9 @@ export default function LedgerFormModal({
                       <input
                         type="checkbox"
                         checked={tabSettings}
+                        disabled={isSuperAdmin}
                         onChange={(e) => setTabSettings(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-4 h-4 text-blue-600 rounded disabled:opacity-70"
                       />
                       <span className="text-sm font-medium text-gray-700">Settings</span>
                       <span className="text-xs text-gray-500 ml-auto">/settings</span>

@@ -66,140 +66,111 @@ const useLedgerStore = create(
       },
 
       // ADD ROLE - WITH TAB PERMISSIONS
-      addRole: async (item) => {
-        set({ isLoading: true, error: null });
-        try {
-          // Make sure tabPermissions is included
-          const roleData = {
-            name: item.name,
-            code: item.code,
-            description: item.description || '',
-            permissions: item.permissions || {
-              create: false,
-              read: false,
-              update: false,
-              delete: false
-            },
-            tabPermissions: item.tabPermissions || {
-              dashboard: false,
-              'add-driver': false,
-              'add-vehicle': false,
-              'driver-list': false,
-              'vehicle-list': false,
-              users: false,
-              ledgers: false,
-              settings: false
-            },
-            status: item.status || 'active'
-          };
-          
-          console.log('📤 Sending role data to API:', JSON.stringify(roleData, null, 2));
-          
-          const response = await ledgerAPI.addRole(roleData);
-          
-          const newItem = response.data;
-          set(state => ({ 
-            roles: [...state.roles, newItem], 
-            isLoading: false 
-          }));
-          
-          console.log('✅ Role created with tabPermissions:', newItem.tabPermissions);
-          
-          Logger.addRole?.(newItem);
-          return { success: true, data: newItem };
-        } catch (error) {
-          console.error('Add role error:', error);
-          set({ 
-            error: error.message || 'Failed to add role', 
-            isLoading: false 
-          });
-          return { success: false, error: error.message };
-        }
-      },
+    addRole: async (item) => {
+  set({ isLoading: true, error: null });
+  try {
+    const forceFull = isSuperAdminName(item.name);
+
+    const roleData = {
+      name: item.name,
+      code: item.code,
+      description: item.description || '',
+      permissions: forceFull
+        ? SUPER_ADMIN_CRUD
+        : (item.permissions || { create: false, read: false, update: false, delete: false }),
+      tabPermissions: forceFull
+        ? SUPER_ADMIN_TAB_PERMISSIONS
+        : (item.tabPermissions || {
+            dashboard: false,
+            'add-driver': false,
+            'add-vehicle': false,
+            'driver-list': false,
+            'vehicle-list': false,
+            users: false,
+            ledgers: false,
+            settings: false,
+          }),
+      status: 'active', // Super Admin should never be created as inactive
+    };
+
+    console.log('📤 Sending role data to API:', JSON.stringify(roleData, null, 2));
+
+    const response = await ledgerAPI.addRole(roleData);
+    const newItem = response.data;
+    set(state => ({ roles: [...state.roles, newItem], isLoading: false }));
+
+    Logger.addRole?.(newItem);
+    return { success: true, data: newItem };
+  } catch (error) {
+    console.error('Add role error:', error);
+    set({ error: error.message || 'Failed to add role', isLoading: false });
+    return { success: false, error: error.message };
+  }
+},
 
       // UPDATE ROLE - WITH TAB PERMISSIONS (SINGLE VERSION)
       updateRole: async (id, updatedData) => {
-        set({ isLoading: true, error: null });
-        try {
-          const roleData = {
-            name: updatedData.name,
-            code: updatedData.code,
-            description: updatedData.description || '',
-            permissions: updatedData.permissions || {
-              create: false,
-              read: false,
-              update: false,
-              delete: false
-            },
-            tabPermissions: updatedData.tabPermissions || {
-              dashboard: false,
-              'add-driver': false,
-              'add-vehicle': false,
-              'driver-list': false,
-              'vehicle-list': false,
-              users: false,
-              ledgers: false,
-              settings: false
-            },
-            status: updatedData.status || 'active'
-          };
-          
-          console.log('📝 Updating role data:', JSON.stringify(roleData, null, 2));
-          
-          const response = await ledgerAPI.updateRole(id, roleData);
-          const updatedItem = response.data;
-          
-          set(state => ({
-            roles: state.roles.map(item =>
-              (item._id === id || item.id === id) ? updatedItem : item
-            ),
-            isLoading: false
-          }));
-          
-          console.log('✅ Role updated with tabPermissions:', updatedItem.tabPermissions);
-          
-          Logger.updateRole?.(updatedItem);
-          return { success: true, data: updatedItem };
-        } catch (error) {
-          console.error('Update role error:', error);
-          set({ 
-            error: error.message || 'Failed to update role', 
-            isLoading: false 
-          });
-          return { success: false, error: error.message };
-        }
-      },
+  set({ isLoading: true, error: null });
+  try {
+    const forceFull = isSuperAdminName(updatedData.name);
+
+    const roleData = {
+      name: updatedData.name,
+      code: updatedData.code,
+      description: updatedData.description || '',
+      permissions: forceFull ? SUPER_ADMIN_CRUD : (updatedData.permissions || {
+        create: false, read: false, update: false, delete: false,
+      }),
+      tabPermissions: forceFull ? SUPER_ADMIN_TAB_PERMISSIONS : (updatedData.tabPermissions || {
+        dashboard: false, 'add-driver': false, 'add-vehicle': false,
+        'driver-list': false, 'vehicle-list': false, users: false,
+        ledgers: false, settings: false,
+      }),
+      status: forceFull ? 'active' : (updatedData.status || 'active'),
+    };
+
+    const response = await ledgerAPI.updateRole(id, roleData);
+    const updatedItem = response.data;
+
+    set(state => ({
+      roles: state.roles.map(item => (item._id === id || item.id === id) ? updatedItem : item),
+      isLoading: false,
+    }));
+
+    Logger.updateRole?.(updatedItem);
+    return { success: true, data: updatedItem };
+  } catch (error) {
+    console.error('Update role error:', error);
+    set({ error: error.message || 'Failed to update role', isLoading: false });
+    return { success: false, error: error.message };
+  }
+},
 
       // DELETE ROLE
-      deleteRole: async (id) => {
-        set({ isLoading: true, error: null });
-        try {
-          const itemToDelete = get().roles.find(item => 
-            item._id === id || item.id === id
-          );
-          
-          await ledgerAPI.deleteRole(id);
-          
-          set(state => ({
-            roles: state.roles.filter(item => 
-              (item._id !== id && item.id !== id)
-            ),
-            isLoading: false
-          }));
-          
-          if (itemToDelete) {
-            Logger.deleteRole?.(id, itemToDelete.name);
-          }
-          return { success: true };
-        } catch (error) {
-          set({ 
-            error: error.message || 'Failed to delete role', 
-            isLoading: false 
-          });
-          return { success: false, error: error.message };
-        }
-      },
+     deleteRole: async (id) => {
+  set({ isLoading: true, error: null });
+  try {
+    const itemToDelete = get().roles.find(item => item._id === id || item.id === id);
 
+    if (itemToDelete && isSuperAdminName(itemToDelete.name)) {
+      set({ isLoading: false });
+      return { success: false, error: 'The Super Admin role cannot be deleted from the app. Contact your database admin.' };
+    }
+
+    await ledgerAPI.deleteRole(id);
+
+    set(state => ({
+      roles: state.roles.filter(item => (item._id !== id && item.id !== id)),
+      isLoading: false,
+    }));
+
+    if (itemToDelete) Logger.deleteRole?.(id, itemToDelete.name);
+    return { success: true };
+  } catch (error) {
+    set({ error: error.message || 'Failed to delete role', isLoading: false });
+    return { success: false, error: error.message };
+  }
+},
       // ==================== DESIGNATIONS ====================
       fetchDesignations: async () => {
         set({ isLoading: true, error: null });

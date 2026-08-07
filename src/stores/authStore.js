@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authAPI } from '../services/api';
 import useLogStore from './logStore';
+import { supabase } from '../services/supabaseClient';
 
 let lastLoginAttempt = 0;
 let isLoggingIn = false;
@@ -17,7 +18,6 @@ const useAuthStore = create(
       isLoading: false,
       error: null,
       
-      // Role-based permissions state
       role: null,
       permissions: null,
       tabPermissions: null,
@@ -43,77 +43,109 @@ const useAuthStore = create(
         try {
           const response = await authAPI.login({ email, password });
 
-          console.log('Login API response:', response);
+          console.log('🔐 Login Response:', JSON.stringify(response, null, 2));
 
-          // Store token based on rememberMe preference
-          if (rememberMe) {
-            localStorage.setItem('token', response.token);
-          } else {
-            sessionStorage.setItem('token', response.token);
-          }
+          const { session, user: supabaseUser, profile } = response;
 
-          // Extract role data from response - CHECK roleId FIRST (your backend sends roleId)
           let roleData = null;
           let permissions = null;
           let tabPermissions = null;
           let accessibleTabs = [];
 
-          // ✅ IMPORTANT: Your backend sends role data in 'roleId', not 'role'
-          const roleFromResponse = response.user.roleId || response.user.role;
-          
-          if (roleFromResponse) {
-            roleData = roleFromResponse;
-            permissions = roleData.permissions || null;
-            tabPermissions = roleData.tabPermissions || null;
+          if (profile) {
+            // ✅ Profile has: id, email, full_name, role_id, status, created_at, updated_at
+            roleData = profile.role || null;
             
-            console.log('✅ Role Data:', roleData);
-            console.log('✅ Permissions:', permissions);
-            console.log('✅ Tab Permissions:', tabPermissions);
+            console.log('✅ Role Data from profile:', JSON.stringify(roleData, null, 2));
             
-            // Calculate accessible tabs
-            if (tabPermissions && typeof tabPermissions === 'object') {
-              Object.keys(tabPermissions).forEach(tabId => {
-                if (tabPermissions[tabId] === true) {
-                  accessibleTabs.push(tabId);
-                }
-              });
+            if (roleData) {
+              permissions = roleData.permissions || null;
+              tabPermissions = roleData.tab_permissions || null;
+              
+              console.log('✅ Permissions:', permissions);
+              console.log('✅ Tab Permissions:', tabPermissions);
             }
-          } else {
-            console.warn('⚠️ No role data found in response!');
           }
 
-          console.log('✅ Accessible Tabs calculated:', accessibleTabs);
+          // ✅ Calculate accessible tabs from tab_permissions
+          if (tabPermissions && typeof tabPermissions === 'object') {
+            console.log('📋 Processing tab_permissions:', tabPermissions);
+            Object.keys(tabPermissions).forEach(tabKey => {
+              if (tabPermissions[tabKey] === true) {
+                accessibleTabs.push(tabKey);
+              }
+            });
+          }
 
-          // Build user object
+          // ✅ Check if user is Super Admin
+          const isSuperAdmin = roleData?.is_super_admin === true;
+          const roleName = roleData?.name || 'user';
+          
+          console.log('👑 Role Check:', { roleName, isSuperAdmin });
+          
+          // ✅ If Super Admin, grant access to ALL tabs from tab_permissions
+          if (isSuperAdmin || roleName === 'Super Admin' || roleName === 'Admin') {
+            console.log('👑 Super Admin detected - granting all tab access');
+            
+            // Get all tabs from tab_permissions
+            if (tabPermissions && typeof tabPermissions === 'object') {
+              accessibleTabs = Object.keys(tabPermissions);
+              console.log('📋 All tabs from tab_permissions:', accessibleTabs);
+            } else {
+              // Fallback default tabs
+              accessibleTabs = [
+                'dashboard', 'add-driver', 'add-vehicle', 
+                'driver-list', 'vehicle-list', 'users', 
+                'ledgers', 'settings', 'admin'
+              ];
+            }
+          }
+
+          console.log('✅ Final Accessible Tabs:', accessibleTabs);
+
+          // ✅ Build user object with ALL fields
           const user = {
-            id: response.user.id || response.user._id,
-            firstName: response.user.firstName,
-            lastName: response.user.lastName,
-            email: response.user.email,
-            phone: response.user.phone || '',
-            roleName: response.user.roleName || roleData?.name,
-            department: response.user.department || '',
-            location: response.user.location || '',
-            employeeId: response.user.employeeId,
+            id: supabaseUser?.id || profile?.id,
+            email: supabaseUser?.email || profile?.email || '',
+            fullName: profile?.full_name || supabaseUser?.user_metadata?.full_name || '',
+            firstName: profile?.full_name?.split(' ')[0] || '',
+            lastName: profile?.full_name?.split(' ').slice(1).join(' ') || '',
+            roleName: roleName,
+            roleId: profile?.role_id || roleData?.id,
+            status: profile?.status || 'active',
             role: roleData,
-            permissions: permissions || {}
+            permissions: permissions || {},
+            tabPermissions: tabPermissions || {},
+            isSuperAdmin: isSuperAdmin,
+            profile: profile,
+            user_metadata: supabaseUser?.user_metadata || {}
           };
 
-          console.log('Stored user object:', user);
+          console.log('👤 Stored user object:', user);
 
+          if (session) {
+            localStorage.setItem('supabaseSession', JSON.stringify(session));
+          }
           localStorage.setItem('user', JSON.stringify(user));
 
           set({
             user,
-            token: response.token,
+            token: session?.access_token || null,
             isAuthenticated: true,
             role: roleData,
-            permissions: permissions,
-            tabPermissions: tabPermissions,
+            permissions: permissions || {},
+            tabPermissions: tabPermissions || {},
             accessibleTabs: accessibleTabs,
             isLoading: false,
             error: null
           });
+
+          // ✅ Log the final state
+          console.log('✅ Auth State Updated:');
+          console.log('  isAuthenticated:', true);
+          console.log('  roleName:', roleName);
+          console.log('  isSuperAdmin:', isSuperAdmin);
+          console.log('  accessibleTabs:', accessibleTabs);
 
           setTimeout(async () => {
             await useLogStore.getState().logLogin('SUCCESS', null, email);
@@ -150,6 +182,7 @@ const useAuthStore = create(
 
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('supabaseSession');
           sessionStorage.removeItem('token');
 
           set({ 
@@ -167,9 +200,8 @@ const useAuthStore = create(
       },
 
       loadUser: async () => {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-
-        if (!token) {
+        const sessionStr = localStorage.getItem('supabaseSession');
+        if (!sessionStr) {
           set({ isLoading: false, isAuthenticated: false });
           return null;
         }
@@ -177,44 +209,61 @@ const useAuthStore = create(
         set({ isLoading: true });
 
         try {
-          const response = await authAPI.getProfile();
+          const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+          
+          if (!supabaseUser) {
+            set({ isLoading: false, isAuthenticated: false });
+            return null;
+          }
 
-          // Extract role data from response - CHECK roleId FIRST
-          let roleData = null;
-          let permissions = null;
-          let tabPermissions = null;
+          const profile = await authAPI.getProfile();
+          
+          console.log('🔄 Load User Profile:', JSON.stringify(profile, null, 2));
+
+          let roleData = profile?.role || null;
+          let permissions = roleData?.permissions || null;
+          let tabPermissions = roleData?.tab_permissions || null;
           let accessibleTabs = [];
 
-          // ✅ IMPORTANT: Your backend sends role data in 'roleId', not 'role'
-          const roleFromResponse = response.data.roleId || response.data.role;
+          if (tabPermissions && typeof tabPermissions === 'object') {
+            Object.keys(tabPermissions).forEach(tabKey => {
+              if (tabPermissions[tabKey] === true) {
+                accessibleTabs.push(tabKey);
+              }
+            });
+          }
+
+          const isSuperAdmin = roleData?.is_super_admin === true;
+          const roleName = roleData?.name || 'user';
           
-          if (roleFromResponse) {
-            roleData = roleFromResponse;
-            permissions = roleData.permissions || null;
-            tabPermissions = roleData.tabPermissions || null;
-            
+          if (isSuperAdmin || roleName === 'Super Admin' || roleName === 'Admin') {
+            console.log('👑 Super Admin detected - granting all tab access');
             if (tabPermissions && typeof tabPermissions === 'object') {
-              Object.keys(tabPermissions).forEach(tabId => {
-                if (tabPermissions[tabId] === true) {
-                  accessibleTabs.push(tabId);
-                }
-              });
+              accessibleTabs = Object.keys(tabPermissions);
+            } else {
+              accessibleTabs = [
+                'dashboard', 'add-driver', 'add-vehicle', 
+                'driver-list', 'vehicle-list', 'users', 
+                'ledgers', 'settings', 'admin'
+              ];
             }
           }
 
-          // Build user object
           const user = {
-            id: response.data.id || response.data._id,
-            firstName: response.data.firstName,
-            lastName: response.data.lastName,
-            email: response.data.email,
-            phone: response.data.phone || '',
-            roleName: response.data.roleName || roleData?.name,
-            department: response.data.department || '',
-            location: response.data.location || '',
-            employeeId: response.data.employeeId,
+            id: supabaseUser.id,
+            email: supabaseUser.email || profile?.email || '',
+            fullName: profile?.full_name || supabaseUser?.user_metadata?.full_name || '',
+            firstName: profile?.full_name?.split(' ')[0] || '',
+            lastName: profile?.full_name?.split(' ').slice(1).join(' ') || '',
+            roleName: roleName,
+            roleId: profile?.role_id || roleData?.id,
+            status: profile?.status || 'active',
             role: roleData,
-            permissions: permissions || {}
+            permissions: permissions || {},
+            tabPermissions: tabPermissions || {},
+            isSuperAdmin: isSuperAdmin,
+            profile: profile,
+            user_metadata: supabaseUser?.user_metadata || {}
           };
 
           localStorage.setItem('user', JSON.stringify(user));
@@ -223,20 +272,23 @@ const useAuthStore = create(
             user, 
             isAuthenticated: true, 
             role: roleData,
-            permissions: permissions,
-            tabPermissions: tabPermissions,
+            permissions: permissions || {},
+            tabPermissions: tabPermissions || {},
             accessibleTabs: accessibleTabs,
             isLoading: false, 
             error: null 
           });
 
-          console.log('Loaded accessibleTabs:', accessibleTabs);
+          console.log('✅ Loaded accessibleTabs:', accessibleTabs);
+          console.log('✅ Loaded role:', roleName);
+          console.log('✅ Is Super Admin:', isSuperAdmin);
 
           return user;
         } catch (error) {
           console.error('Failed to load user:', error);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('supabaseSession');
           sessionStorage.removeItem('token');
           set({ 
             user: null, 
@@ -260,67 +312,69 @@ const useAuthStore = create(
         localStorage.setItem('user', JSON.stringify(updatedUser));
       },
 
-      // Check CRUD permission — Admin/Super Admin always pass
       hasPermission: (action) => {
         const { user, permissions } = get();
         if (!user) return false;
         
-        // Check role name from multiple possible sources
-        const roleName = user.roleName || user.role?.name || user.role?.roleName;
-        if (roleName === 'Admin' || roleName === 'admin' || roleName === 'Super Admin') {
+        const roleName = user.roleName || user.role?.name;
+        const isSuperAdmin = user.isSuperAdmin || user.role?.is_super_admin === true;
+        
+        if (isSuperAdmin || roleName === 'Super Admin' || roleName === 'Admin') {
           return true;
         }
         
         return permissions?.[action] === true;
       },
 
-      // Check tab access — Admin/Super Admin always pass
       canAccessTab: (tabKey) => {
-        const { user, accessibleTabs } = get();
+        const { user, accessibleTabs, role } = get();
+        
+        console.log(`🔍 Checking tab access for "${tabKey}":`);
+        console.log('  User:', user?.email);
+        console.log('  Accessible Tabs:', accessibleTabs);
+        console.log('  Role:', role);
+        
         if (!user) return false;
         
-        // Check role name from multiple possible sources
-        const roleName = user.roleName || user.role?.name || user.role?.roleName;
-        if (roleName === 'Admin' || roleName === 'admin' || roleName === 'Super Admin') {
+        const roleName = user.roleName || user.role?.name || role?.name;
+        const isSuperAdmin = user.isSuperAdmin || user.role?.is_super_admin === true || role?.is_super_admin === true;
+        
+        console.log('  Role Name:', roleName);
+        console.log('  Is Super Admin:', isSuperAdmin);
+        
+        if (isSuperAdmin || roleName === 'Super Admin' || roleName === 'Admin') {
+          console.log('  ✅ Super Admin - granting access');
           return true;
         }
         
-        return accessibleTabs.includes(tabKey);
+        const hasAccess = accessibleTabs.includes(tabKey);
+        console.log(`  ${hasAccess ? '✅' : '❌'} Access granted:`, hasAccess);
+        
+        return hasAccess;
       },
 
-      // ✅ NEW: Check if user can view ledger data (makes, fuel types, etc.)
-      // This is separate from tab permission
       canViewLedgerData: () => {
-        const { user, permissions } = get();
+        const { user } = get();
         if (!user) return false;
-        
-        // Admin always has access
-        const roleName = user.roleName || user.role?.name || user.role?.roleName;
-        if (roleName === 'Admin' || roleName === 'admin' || roleName === 'Super Admin') {
-          return true;
-        }
-        
-        // Check if user has permission to view ledger data
-        // You can add a specific permission or allow all users
-        // Option 1: Allow all authenticated users to view ledger data
         return true;
-        
-        // Option 2: Use a specific permission (uncomment if you want to control it)
-        // return permissions?.viewLedgerData === true;
       },
 
-      // Alias for hasPermission (for consistency)
       canPerform: (action) => {
         return get().hasPermission(action);
       },
 
-      // Get all accessible tabs
       getAccessibleTabs: () => {
         const { accessibleTabs, user } = get();
         
-        const roleName = user?.roleName || user?.role?.name || user?.role?.roleName;
-        if (roleName === 'Admin' || roleName === 'admin' || roleName === 'Super Admin') {
-          return ['dashboard', 'add-driver', 'add-vehicle', 'driver-list', 'vehicle-list', 'users', 'ledgers', 'settings'];
+        const roleName = user?.roleName || user?.role?.name;
+        const isSuperAdmin = user?.isSuperAdmin || user?.role?.is_super_admin === true;
+        
+        if (isSuperAdmin || roleName === 'Super Admin' || roleName === 'Admin') {
+          return [
+            'dashboard', 'add-driver', 'add-vehicle', 
+            'driver-list', 'vehicle-list', 'users', 
+            'ledgers', 'settings', 'admin'
+          ];
         }
         
         return accessibleTabs;
@@ -330,7 +384,7 @@ const useAuthStore = create(
         const { user } = get();
         if (!user) return false;
         
-        const userRole = user.roleName || user.role?.name || user.role?.roleName;
+        const userRole = user.roleName || user.role?.name;
         if (Array.isArray(role)) {
           return role.includes(userRole);
         }
@@ -340,48 +394,62 @@ const useAuthStore = create(
       getFullName: () => {
         const { user } = get();
         if (!user) return '';
-        return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+        return user.fullName || user.firstName || user.email || '';
       },
 
-      // Refresh permissions (call after role updates)
       refreshPermissions: async () => {
         const { user } = get();
         if (!user) return { success: false, error: 'No user logged in' };
         
         try {
-          const response = await authAPI.getProfile();
+          const profile = await authAPI.getProfile();
           
-          let roleData = null;
-          let permissions = null;
-          let tabPermissions = null;
+          console.log('🔄 Refreshed Profile:', JSON.stringify(profile, null, 2));
+
+          let roleData = profile?.role || null;
+          let permissions = roleData?.permissions || null;
+          let tabPermissions = roleData?.tab_permissions || null;
           let accessibleTabs = [];
 
-          // ✅ IMPORTANT: Your backend sends role data in 'roleId', not 'role'
-          const roleFromResponse = response.data.roleId || response.data.role;
+          if (tabPermissions && typeof tabPermissions === 'object') {
+            Object.keys(tabPermissions).forEach(tabKey => {
+              if (tabPermissions[tabKey] === true) {
+                accessibleTabs.push(tabKey);
+              }
+            });
+          }
+
+          const isSuperAdmin = roleData?.is_super_admin === true;
+          const roleName = roleData?.name || 'user';
           
-          if (roleFromResponse) {
-            roleData = roleFromResponse;
-            permissions = roleData.permissions || null;
-            tabPermissions = roleData.tabPermissions || null;
-            
+          if (isSuperAdmin || roleName === 'Super Admin' || roleName === 'Admin') {
             if (tabPermissions && typeof tabPermissions === 'object') {
-              Object.keys(tabPermissions).forEach(tabId => {
-                if (tabPermissions[tabId] === true) {
-                  accessibleTabs.push(tabId);
-                }
-              });
+              accessibleTabs = Object.keys(tabPermissions);
+            } else {
+              accessibleTabs = [
+                'dashboard', 'add-driver', 'add-vehicle', 
+                'driver-list', 'vehicle-list', 'users', 
+                'ledgers', 'settings', 'admin'
+              ];
             }
           }
           
           set({
             role: roleData,
-            permissions: permissions,
-            tabPermissions: tabPermissions,
+            permissions: permissions || {},
+            tabPermissions: tabPermissions || {},
             accessibleTabs: accessibleTabs
           });
           
-          // Update user object
-          const updatedUser = { ...user, permissions: permissions || {}, role: roleData };
+          const updatedUser = { 
+            ...user, 
+            permissions: permissions || {}, 
+            tabPermissions: tabPermissions || {},
+            role: roleData,
+            roleName: roleName,
+            isSuperAdmin: isSuperAdmin,
+            profile: profile
+          };
           set({ user: updatedUser });
           localStorage.setItem('user', JSON.stringify(updatedUser));
           
@@ -408,5 +476,44 @@ const useAuthStore = create(
     }
   )
 );
+
+// Initialize auth on store creation
+const initializeAuth = async () => {
+  const store = useAuthStore.getState();
+  const sessionStr = localStorage.getItem('supabaseSession');
+  if (sessionStr) {
+    await store.loadUser();
+  } else {
+    store.setState({ isLoading: false });
+  }
+};
+
+initializeAuth();
+
+// Listen for auth changes
+authAPI.onAuthStateChange(async (event, session) => {
+  console.log('🔔 Auth State Change:', event, session?.user?.email);
+  
+  const store = useAuthStore.getState();
+  
+  if (event === 'SIGNED_IN' && session?.user) {
+    await store.loadUser();
+  } else if (event === 'SIGNED_OUT') {
+    store.setState({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      role: null,
+      permissions: null,
+      tabPermissions: null,
+      accessibleTabs: [],
+      isLoading: false
+    });
+    localStorage.removeItem('supabaseSession');
+    localStorage.removeItem('user');
+  } else if (event === 'USER_UPDATED' && session?.user) {
+    await store.refreshPermissions();
+  }
+});
 
 export default useAuthStore;
